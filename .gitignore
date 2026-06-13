@@ -1,0 +1,8 @@
+node_modules/
+.vercel/
+*.log
+server.log
+server.err.log
+.env
+.DS_Store
+Thumbs.db
