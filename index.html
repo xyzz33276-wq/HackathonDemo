@@ -17,8 +17,8 @@
         <span id="riskBadge" class="risk-pill neutral">未推演</span>
       </div>
       <div class="top-actions">
-        <button id="rerunButton" class="icon-button" type="button" title="重新推演">RUN</button>
-        <button id="stopButton" class="icon-button" type="button" disabled title="停止事件流">STOP</button>
+        <button id="rerunButton" class="icon-button" type="button" title="重新推演">重置</button>
+        <button id="stopButton" class="icon-button" type="button" disabled title="停止事件流">停止</button>
       </div>
     </header>
 
@@ -26,69 +26,22 @@
       <section class="stage">
         <section class="hero-strip">
           <div>
-            <span class="eyebrow">CYBER MYSTERY · MULTI-AGENT STORY SANDBOX</span>
+            <span class="eyebrow">CYBER MYSTERY · THREE ACT INVESTIGATION</span>
             <h1 id="stageTitle">镜城零点案</h1>
             <p id="stageObjective">三幕内判断真相方向。</p>
           </div>
           <div class="act-counter">
-            <span>当前幕</span>
+            <span>当前进度</span>
             <strong id="actCounter">0 / 3</strong>
           </div>
         </section>
 
-        <section class="story-stack">
-          <article class="panel story-panel">
-            <div class="panel-head">
-              <span>01</span>
-              <h2>故事背景</h2>
-            </div>
-            <div id="openingStory" class="story-copy"></div>
-            <div class="memory-box">
-              <strong>你目前记得</strong>
-              <ul id="playerMemory"></ul>
-            </div>
-          </article>
-
-          <article class="panel case-brief">
-            <div class="panel-head">
-              <span>02</span>
-              <h2>人物基本信息与案情</h2>
-            </div>
-            <div class="case-title">
-              <strong id="caseTitle">加载中</strong>
-              <span id="caseMeta">--</span>
-            </div>
-            <p id="casePremise"></p>
-            <dl class="brief-list">
-              <div><dt>玩家身份</dt><dd id="playerRole">--</dd></div>
-              <div><dt>受害者</dt><dd id="victim">--</dd></div>
-              <div><dt>核心谜团</dt><dd id="mystery">--</dd></div>
-            </dl>
-            <div id="characterOverview" class="overview-grid"></div>
-            <div id="plotOverview" class="plot-overview"></div>
-          </article>
-        </section>
-
-        <section class="intro-grid">
-          <article class="panel timeline-panel">
-            <div class="panel-heading">
-              <h2>案发时间线</h2>
-              <span>零点前后 36 分钟</span>
-            </div>
-            <div id="timelineList" class="timeline-list"></div>
-          </article>
-
-          <article class="panel truth-panel">
-            <div class="panel-heading">
-              <h2>四条真相线</h2>
-              <span>调查方向</span>
-            </div>
-            <div id="truthThreads" class="truth-threads"></div>
-            <div class="how-card">
-              <strong>如何开始</strong>
-              <ol id="howToPlay"></ol>
-            </div>
-          </article>
+        <section class="panel map-panel">
+          <div class="panel-heading">
+            <h2>人物关系与情节图谱</h2>
+            <span>每条边都对应一条可追查证据</span>
+          </div>
+          <div id="caseMap" class="case-map"></div>
         </section>
 
         <section class="panel investigation-panel">
@@ -121,7 +74,7 @@
           <article class="panel metrics-panel">
             <div class="panel-heading">
               <h2>世界状态</h2>
-              <span id="metricMeta">初始态</span>
+              <span id="metricMeta">初始状态</span>
             </div>
             <div id="metricsGrid" class="metrics-grid"></div>
           </article>
@@ -133,22 +86,6 @@
             </div>
             <div id="suspectGrid" class="suspect-grid"></div>
           </article>
-        </section>
-
-        <section class="panel map-panel">
-          <div class="panel-heading">
-            <h2>人物关系与情节图谱</h2>
-            <span>节点之间为真实连接关系</span>
-          </div>
-          <div id="caseMap" class="case-map"></div>
-        </section>
-
-        <section class="panel dossier-panel">
-          <div class="panel-heading">
-            <h2>角色档案</h2>
-            <span>动机 / 谎言 / 玩家钩子</span>
-          </div>
-          <div id="dossierGrid" class="dossier-grid"></div>
         </section>
 
         <section class="workbench-grid">
@@ -170,13 +107,65 @@
               <span id="endingMeta">未生成</span>
             </div>
             <div id="reportBody" class="report-body">
-              <p>逐幕完成调查后，第三幕会生成真相报告。系统会根据角色状态、线索公开程度和玩家记忆恢复程度生成结局。</p>
+              <p>逐幕完成调查后，第三幕会生成真相报告。报告会说明你选择了哪条公开口径、证据是否足够，以及哪些真相仍被城市网络遮住。</p>
             </div>
           </article>
         </section>
       </section>
+
+      <aside class="case-sidebar" aria-label="案件侧边栏">
+        <div class="sidebar-head">
+          <span>CASE FILE</span>
+          <strong>案件档案</strong>
+        </div>
+
+        <details class="sidebar-section" open>
+          <summary>故事背景</summary>
+          <div id="openingStory" class="story-copy"></div>
+          <div class="memory-box">
+            <strong>你目前记得</strong>
+            <ul id="playerMemory"></ul>
+          </div>
+        </details>
+
+        <details class="sidebar-section" open>
+          <summary>人物与案件</summary>
+          <div class="case-title">
+            <strong id="caseTitle">加载中</strong>
+            <span id="caseMeta">--</span>
+          </div>
+          <p id="casePremise" class="sidebar-copy"></p>
+          <dl class="brief-list">
+            <div><dt>玩家身份</dt><dd id="playerRole">--</dd></div>
+            <div><dt>受害者</dt><dd id="victim">--</dd></div>
+            <div><dt>核心谜团</dt><dd id="mystery">--</dd></div>
+          </dl>
+          <div id="characterOverview" class="overview-grid sidebar-grid"></div>
+          <div id="plotOverview" class="plot-overview sidebar-grid"></div>
+        </details>
+
+        <details class="sidebar-section" open>
+          <summary>案发时间线</summary>
+          <div id="timelineList" class="timeline-list"></div>
+        </details>
+
+        <details class="sidebar-section" open>
+          <summary>四条真相线</summary>
+          <div id="truthThreads" class="truth-threads"></div>
+          <div class="how-card">
+            <strong>如何开始</strong>
+            <ol id="howToPlay"></ol>
+          </div>
+        </details>
+
+        <details class="sidebar-section" open>
+          <summary>角色档案</summary>
+          <div id="dossierGrid" class="dossier-grid"></div>
+        </details>
+      </aside>
     </main>
 
+    <script src="./case-data.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

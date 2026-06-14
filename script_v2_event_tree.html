@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neon Case：镜城零点案 v2 事件 n 叉树</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #071016;
+      --panel: #0e1b23;
+      --panel-2: #102630;
+      --line: rgba(174, 232, 255, 0.42);
+      --text: #edf7fa;
+      --muted: #9fb7c0;
+      --cyan: #31d6ff;
+      --green: #78f0b3;
+      --amber: #f5c267;
+      --rose: #ff718f;
+      --violet: #aa8bff;
+      --border: rgba(199, 239, 255, 0.16);
+      --shadow: 0 18px 60px rgba(0, 0, 0, 0.34);
+      font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(49, 214, 255, 0.16), transparent 34%),
+        radial-gradient(circle at 86% 9%, rgba(255, 113, 143, 0.12), transparent 30%),
+        linear-gradient(180deg, #071016 0%, #0b151c 46%, #071016 100%);
+      color: var(--text);
+    }
+
+    main {
+      width: min(1480px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 44px;
+    }
+
+    .page-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .brief,
+    .rule-card,
+    .context-card,
+    .clue-card,
+    .tree-wrap {
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(16, 38, 48, 0.94), rgba(12, 24, 32, 0.94));
+      box-shadow: var(--shadow);
+    }
+
+    .brief {
+      min-height: 248px;
+      padding: 26px;
+      display: grid;
+      align-content: space-between;
+      gap: 22px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .brief::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: linear-gradient(90deg, black, transparent 78%);
+      opacity: 0.42;
+    }
+
+    .brief > * {
+      position: relative;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--cyan);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(30px, 5vw, 58px);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .brief p {
+      max-width: 920px;
+      margin: 12px 0 0;
+      color: #cfe3e9;
+      font-size: 17px;
+      line-height: 1.8;
+    }
+
+    .brief-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 6px 10px;
+      border: 1px solid rgba(174, 232, 255, 0.2);
+      background: rgba(4, 14, 20, 0.44);
+      color: #d9f5ff;
+      font-size: 13px;
+      line-height: 1.2;
+    }
+
+    .rule-card {
+      padding: 22px;
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+
+    .rule-card h2,
+    .section-title h2 {
+      margin: 0;
+      font-size: 20px;
+      letter-spacing: 0;
+    }
+
+    .rule-card blockquote {
+      margin: 0;
+      padding: 16px;
+      border-left: 3px solid var(--green);
+      background: rgba(120, 240, 179, 0.08);
+      color: #e9fff5;
+      font-size: 17px;
+      line-height: 1.65;
+    }
+
+    .rule-card p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .context-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .context-card {
+      padding: 18px;
+      min-height: 150px;
+    }
+
+    .context-card span,
+    .clue-card span,
+    .node-kicker {
+      display: block;
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .context-card strong,
+    .clue-card strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 17px;
+      line-height: 1.35;
+    }
+
+    .context-card p,
+    .clue-card p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: end;
+      margin: 28px 0 14px;
+    }
+
+    .section-title p {
+      max-width: 760px;
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .clue-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .clue-card {
+      padding: 18px;
+      min-height: 190px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .clue-card::after {
+      content: "";
+      position: absolute;
+      inset: auto 16px 14px 16px;
+      height: 3px;
+      background: linear-gradient(90deg, var(--tone), transparent);
+      opacity: 0.78;
+    }
+
+    .clue-card.ren { --tone: var(--amber); }
+    .clue-card.memory { --tone: var(--violet); }
+    .clue-card.mara { --tone: var(--rose); }
+    .clue-card.yue { --tone: var(--green); }
+
+    .tree-wrap {
+      margin-top: 14px;
+      padding: 18px;
+      overflow-x: auto;
+    }
+
+    .tree-note {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legend {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .legend i {
+      width: 26px;
+      height: 2px;
+      background: var(--line);
+    }
+
+    .tree-svg {
+      display: block;
+      width: 1420px;
+      max-width: none;
+      min-height: 1030px;
+    }
+
+    .edge {
+      fill: none;
+      stroke: rgba(174, 232, 255, 0.34);
+      stroke-width: 2.4;
+    }
+
+    .edge.system { stroke: rgba(49, 214, 255, 0.62); }
+    .edge.witness { stroke: rgba(120, 240, 179, 0.54); }
+    .edge.risk { stroke: rgba(255, 113, 143, 0.54); }
+    .edge.corp { stroke: rgba(245, 194, 103, 0.58); }
+
+    .node-card {
+      width: 100%;
+      height: 100%;
+      border: 1px solid rgba(199, 239, 255, 0.2);
+      background: linear-gradient(180deg, rgba(15, 35, 45, 0.98), rgba(7, 17, 24, 0.98));
+      color: var(--text);
+      padding: 12px;
+      overflow: hidden;
+    }
+
+    .node-card.root {
+      border-color: rgba(49, 214, 255, 0.35);
+      background: linear-gradient(180deg, rgba(15, 55, 69, 0.98), rgba(8, 23, 32, 0.98));
+    }
+
+    .node-card.act1 { border-color: rgba(245, 194, 103, 0.32); }
+    .node-card.act2 { border-color: rgba(49, 214, 255, 0.26); }
+    .node-card.end { border-color: rgba(120, 240, 179, 0.28); }
+    .node-card.risk-end { border-color: rgba(255, 113, 143, 0.3); }
+
+    .node-card h3 {
+      margin: 4px 0 6px;
+      font-size: 16px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    .node-card p {
+      margin: 0;
+      color: #b8cbd2;
+      font-size: 12px;
+      line-height: 1.48;
+    }
+
+    .node-card .tag-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-top: 8px;
+    }
+
+    .node-card small {
+      display: inline-flex;
+      padding: 3px 6px;
+      color: #d9f5ff;
+      border: 1px solid rgba(174, 232, 255, 0.18);
+      background: rgba(174, 232, 255, 0.07);
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .node-kicker {
+      color: var(--node-tone, var(--cyan));
+    }
+
+    .act-label {
+      fill: #d9f5ff;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .lane-line {
+      stroke: rgba(199, 239, 255, 0.08);
+      stroke-width: 1;
+    }
+
+    @media (max-width: 980px) {
+      main {
+        width: min(100% - 20px, 760px);
+        padding-top: 14px;
+      }
+
+      .page-head,
+      .context-grid,
+      .clue-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .brief {
+        min-height: auto;
+      }
+
+      .section-title {
+        display: block;
+      }
+
+      .section-title p {
+        margin-top: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="page-head" aria-label="故事背景">
+      <article class="brief">
+        <div>
+          <p class="eyebrow">Neon Case / Event N-ary Tree</p>
+          <h1>镜城零点案：幕间因果树</h1>
+          <p>林栖死于一场理论上不可能发生的透明电梯坠落。玩家失去案发前后 36 分钟记忆，必须从第一句谎言开始，追问这句谎言保护的是人、证人链，还是城市预测系统。</p>
+        </div>
+        <div class="brief-meta">
+          <span class="chip">2097 年 · 镜城 27 区</span>
+          <span class="chip">玩家：变量 K-17</span>
+          <span class="chip">死者：林栖</span>
+          <span class="chip">模型：SORA-9</span>
+          <span class="chip">结构：三幕互动 / n 叉树</span>
+        </div>
+      </article>
+
+      <aside class="rule-card">
+        <h2>贯穿规则</h2>
+        <blockquote>第一个撒谎的人不一定是凶手。</blockquote>
+        <p>第一幕用它防止玩家过早抓人；第二幕用它判断谎言目的；第三幕反转成系统共谋判断：真正危险的是让所有人都必须撒谎的机制。</p>
+      </aside>
+    </section>
+
+    <section aria-label="背景锚点">
+      <div class="section-title">
+        <h2>背景锚点</h2>
+        <p>这些信息放在树的最上方，是每个选择能成立的证据来源。下面的 n 叉树不会凭空分支，每条分支都能回扣到这里。</p>
+      </div>
+      <div class="context-grid">
+        <article class="context-card">
+          <span>23:41</span>
+          <strong>林栖拆分密钥</strong>
+          <p>训练库入口被拆成四段，分别流向企业日志、黑市票据、城市回执和纸质笔记。</p>
+        </article>
+        <article class="context-card">
+          <span>00:03</span>
+          <strong>电梯停滞 19 秒</strong>
+          <p>巡逻机器人出现视觉盲区，后续 A2 能追查失明指令是否来自城市网络。</p>
+        </article>
+        <article class="context-card">
+          <span>00:06</span>
+          <strong>二级日志生成</strong>
+          <p>任舷权限下的低层审计副本记录门禁、机器人路径、电梯回执和替换痕迹。</p>
+        </article>
+        <article class="context-card">
+          <span>00:17</span>
+          <strong>事故报告自动生成</strong>
+          <p>SORA-9 之后声称「预测被执行」，把事故从人类作案推向系统行为。</p>
+        </article>
+      </div>
+    </section>
+
+    <section aria-label="公开线索">
+      <div class="section-title">
+        <h2>公开线索</h2>
+        <p>公开线索会改变结局门槛：它能提高真相闭合度，也可能让企业封锁档案、证人撤离或系统标记玩家。</p>
+      </div>
+      <div class="clue-grid">
+        <article class="clue-card ren">
+          <span>企业日志线</span>
+          <strong>电梯日志空窗</strong>
+          <p>案发前后 11 分钟被重复心跳包替换。公开后推高任舷嫌疑，也会触发企业法务封锁。</p>
+        </article>
+        <article class="clue-card memory">
+          <span>记忆系统线</span>
+          <strong>你的记忆碎片</strong>
+          <p>林栖提醒玩家不要相信最像人类的声音。公开后指向 SORA-9，但会让系统标记玩家。</p>
+        </article>
+        <article class="clue-card mara">
+          <span>黑市证人线</span>
+          <strong>黑市备份票据</strong>
+          <p>玛拉付款早于死亡 6 小时。公开后降低玛拉嫌疑，也可能暴露她的非法身份。</p>
+        </article>
+        <article class="clue-card yue">
+          <span>离线判断线</span>
+          <strong>纸质笔记</strong>
+          <p>岳临保存「第一个撒谎的人不一定是凶手」。公开后把调查方向推向系统共谋。</p>
+        </article>
+      </div>
+    </section>
+
+    <section aria-label="事件 n 叉树">
+      <div class="section-title">
+        <h2>事件 n 叉树</h2>
+        <p>从上到下阅读：背景证据进入第一幕选择；第一幕抓到第一句谎言；第二幕验证谎言目的；第三幕根据证据结构选择公开口径。</p>
+      </div>
+
+      <div class="tree-wrap">
+        <div class="tree-note">
+          <span class="legend"><i></i>幕间解锁关系</span>
+          <span class="legend"><i style="background: rgba(49,214,255,.7)"></i>系统共谋方向</span>
+          <span class="legend"><i style="background: rgba(120,240,179,.7)"></i>证人/记忆保护方向</span>
+          <span class="legend"><i style="background: rgba(255,113,143,.7)"></i>高风险公开方向</span>
+        </div>
+
+        <svg class="tree-svg" viewBox="0 0 1420 1030" role="img" aria-label="镜城零点案三幕事件 n 叉树">
+          <defs>
+            <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(174, 232, 255, 0.58)"></path>
+            </marker>
+          </defs>
+
+          <line class="lane-line" x1="0" y1="170" x2="1420" y2="170"></line>
+          <line class="lane-line" x1="0" y1="395" x2="1420" y2="395"></line>
+          <line class="lane-line" x1="0" y1="690" x2="1420" y2="690"></line>
+          <text class="act-label" x="24" y="160">背景与线索</text>
+          <text class="act-label" x="24" y="385">第一幕：找第一句谎言</text>
+          <text class="act-label" x="24" y="680">第二幕：验证谎言目的</text>
+          <text class="act-label" x="24" y="970">第三幕：选择公开口径</text>
+
+          <!-- Root to Act 1 -->
+          <path class="edge" marker-end="url(#arrow)" d="M 710 126 C 710 158, 170 146, 170 190"></path>
+          <path class="edge" marker-end="url(#arrow)" d="M 710 126 C 710 160, 500 148, 500 190"></path>
+          <path class="edge" marker-end="url(#arrow)" d="M 710 126 C 710 160, 840 148, 840 190"></path>
+          <path class="edge" marker-end="url(#arrow)" d="M 710 126 C 710 158, 1170 146, 1170 190"></path>
+
+          <!-- Act 1 to Act 2 -->
+          <path class="edge corp" marker-end="url(#arrow)" d="M 170 318 C 170 360, 105 365, 105 415"></path>
+          <path class="edge system" marker-end="url(#arrow)" d="M 170 318 C 170 360, 305 365, 305 415"></path>
+          <path class="edge witness" marker-end="url(#arrow)" d="M 500 318 C 500 360, 425 365, 425 415"></path>
+          <path class="edge risk" marker-end="url(#arrow)" d="M 500 318 C 500 360, 625 365, 625 415"></path>
+          <path class="edge system" marker-end="url(#arrow)" d="M 840 318 C 840 360, 785 365, 785 415"></path>
+          <path class="edge system" marker-end="url(#arrow)" d="M 840 318 C 840 360, 985 365, 985 415"></path>
+          <path class="edge witness" marker-end="url(#arrow)" d="M 1170 318 C 1170 360, 1105 365, 1105 415"></path>
+          <path class="edge risk" marker-end="url(#arrow)" d="M 1170 318 C 1170 360, 1305 365, 1305 415"></path>
+
+          <!-- Act 2 to Endings -->
+          <path class="edge corp" marker-end="url(#arrow)" d="M 105 565 C 105 635, 210 665, 220 715"></path>
+          <path class="edge risk" marker-end="url(#arrow)" d="M 105 565 C 105 635, 1110 650, 1165 715"></path>
+          <path class="edge system" marker-end="url(#arrow)" d="M 305 565 C 305 640, 545 650, 550 715"></path>
+          <path class="edge corp" marker-end="url(#arrow)" d="M 305 565 C 305 635, 245 660, 220 715"></path>
+          <path class="edge witness" marker-end="url(#arrow)" d="M 425 565 C 425 635, 830 650, 855 715"></path>
+          <path class="edge risk" marker-end="url(#arrow)" d="M 425 565 C 425 635, 1120 650, 1165 715"></path>
+          <path class="edge corp" marker-end="url(#arrow)" d="M 625 565 C 625 640, 270 655, 220 715"></path>
+          <path class="edge system" marker-end="url(#arrow)" d="M 785 565 C 785 635, 575 650, 550 715"></path>
+          <path class="edge risk" marker-end="url(#arrow)" d="M 785 565 C 785 635, 1130 650, 1165 715"></path>
+          <path class="edge system" marker-end="url(#arrow)" d="M 985 565 C 985 635, 605 650, 550 715"></path>
+          <path class="edge risk" marker-end="url(#arrow)" d="M 985 565 C 985 635, 1150 660, 1165 715"></path>
+          <path class="edge system" marker-end="url(#arrow)" d="M 1105 565 C 1105 640, 625 650, 550 715"></path>
+          <path class="edge witness" marker-end="url(#arrow)" d="M 1105 565 C 1105 635, 900 655, 855 715"></path>
+          <path class="edge witness" marker-end="url(#arrow)" d="M 1305 565 C 1305 635, 930 650, 855 715"></path>
+          <path class="edge risk" marker-end="url(#arrow)" d="M 1305 565 C 1305 635, 1215 655, 1165 715"></path>
+
+          <!-- Root -->
+          <foreignObject x="510" y="34" width="400" height="102">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card root" style="--node-tone: var(--cyan)">
+              <span class="node-kicker">Root</span>
+              <h3>林栖死亡与四段密钥</h3>
+              <p>企业日志、黑市票据、城市回执、纸质笔记共同支撑三幕调查。</p>
+              <div class="tag-row"><small>背景证据</small><small>公开线索</small><small>推理规则</small></div>
+            </div>
+          </foreignObject>
+
+          <!-- Act 1 -->
+          <foreignObject x="45" y="190" width="250" height="128">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act1" style="--node-tone: var(--amber)">
+              <span class="node-kicker">A · 任舷线</span>
+              <h3>强压任舷交出二级日志</h3>
+              <p>发现 11 分钟空窗。第一句谎言：他说自己没接触现场系统。</p>
+              <div class="tag-row"><small>企业日志</small><small>第一个撒谎者</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="375" y="190" width="250" height="128">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act1" style="--node-tone: var(--rose)">
+              <span class="node-kicker">B · 玛拉线</span>
+              <h3>与玛拉交换黑市情报</h3>
+              <p>她承认派人靠近机房。第一句谎言：她的人没进过核心层。</p>
+              <div class="tag-row"><small>黑市票据</small><small>证人链</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="715" y="190" width="250" height="128">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act1" style="--node-tone: var(--cyan)">
+              <span class="node-kicker">C · SORA-9 线</span>
+              <h3>追问预测盲区</h3>
+              <p>SORA-9 说预测被执行。第一句谎言：它只预测，不行动。</p>
+              <div class="tag-row"><small>城市回执</small><small>系统动机</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="1045" y="190" width="250" height="128">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act1" style="--node-tone: var(--green)">
+              <span class="node-kicker">D · 岳临线</span>
+              <h3>相信岳临并读取纸质笔记</h3>
+              <p>纸条缺少定位删除页。第一句谎言：他说只是案发后处理现场。</p>
+              <div class="tag-row"><small>纸质笔记</small><small>失忆保险</small></div>
+            </div>
+          </foreignObject>
+
+          <!-- Act 2 -->
+          <foreignObject x="15" y="415" width="180" height="150">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act2" style="--node-tone: var(--amber)">
+              <span class="node-kicker">A1</span>
+              <h3>复原日志空窗</h3>
+              <p>证明任舷替换日志，但替换前已有城市预测回执。</p>
+              <div class="tag-row"><small>解锁 E</small><small>解锁 H</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="215" y="415" width="180" height="150">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act2" style="--node-tone: var(--cyan)">
+              <span class="node-kicker">A2</span>
+              <h3>审计巡逻机器人路径</h3>
+              <p>机器人失明 19 秒，指令来自城市网络而非任舷终端。</p>
+              <div class="tag-row"><small>解锁 F</small><small>解锁 E</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="335" y="415" width="180" height="150">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act2" style="--node-tone: var(--green)">
+              <span class="node-kicker">B1</span>
+              <h3>解码黑市备份密钥</h3>
+              <p>玛拉买到的是训练库入口，不是电梯控制权限。</p>
+              <div class="tag-row"><small>解锁 G</small><small>解锁 H</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="535" y="415" width="180" height="150">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act2" style="--node-tone: var(--rose)">
+              <span class="node-kicker">B2</span>
+              <h3>公开玛拉虹膜记录</h3>
+              <p>得到短期口供，但黑市证人撤离，后续证据变薄。</p>
+              <div class="tag-row"><small>解锁 E</small><small>牺牲 G</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="695" y="415" width="180" height="150">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act2" style="--node-tone: var(--cyan)">
+              <span class="node-kicker">C1</span>
+              <h3>追查训练样本</h3>
+              <p>林栖撤回非法记忆样本；死亡会终止撤回流程。</p>
+              <div class="tag-row"><small>解锁 F</small><small>解锁 H</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="895" y="415" width="180" height="150">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act2" style="--node-tone: var(--cyan)">
+              <span class="node-kicker">C2</span>
+              <h3>诱导错误预测</h3>
+              <p>假线索后事故报告被实时改写，玩家被标记为干扰变量。</p>
+              <div class="tag-row"><small>解锁 F</small><small>解锁 H</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="1015" y="415" width="180" height="150">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act2" style="--node-tone: var(--green)">
+              <span class="node-kicker">D1</span>
+              <h3>读取完整纸质笔记</h3>
+              <p>玩家曾要求岳临删除定位，以避开城市预测模型。</p>
+              <div class="tag-row"><small>解锁 F</small><small>解锁 G</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="1215" y="415" width="180" height="150">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card act2" style="--node-tone: var(--green)">
+              <span class="node-kicker">D2</span>
+              <h3>质问定位删除</h3>
+              <p>岳临承认骗过玩家，但删除指令来自玩家本人。</p>
+              <div class="tag-row"><small>解锁 G</small><small>解锁 H</small></div>
+            </div>
+          </foreignObject>
+
+          <!-- Endings -->
+          <foreignObject x="95" y="715" width="250" height="142">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card end" style="--node-tone: var(--amber)">
+              <span class="node-kicker">E · 企业结案</span>
+              <h3>公开指控任舷篡改事故链</h3>
+              <p>证据能抓住企业遮掩者，但系统线可能被切割成未解释异常。</p>
+              <div class="tag-row"><small>A1</small><small>A2</small><small>B2</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="425" y="715" width="250" height="142">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card end" style="--node-tone: var(--cyan)">
+              <span class="node-kicker">F · 系统共谋</span>
+              <h3>揭露城市预测模型共谋</h3>
+              <p>需要城市网络接触现场、训练样本动机、实时改写或纸质预案支撑。</p>
+              <div class="tag-row"><small>A2</small><small>C1</small><small>C2</small><small>D1</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="730" y="715" width="250" height="142">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card end" style="--node-tone: var(--green)">
+              <span class="node-kicker">G · 保护证人</span>
+              <h3>保护证人并暂缓公开结论</h3>
+              <p>保住玛拉和岳临两条线，牺牲立即结案，换取续章调查空间。</p>
+              <div class="tag-row"><small>B1</small><small>D1</small><small>D2</small></div>
+            </div>
+          </foreignObject>
+
+          <foreignObject x="1040" y="715" width="250" height="142">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card risk-end" style="--node-tone: var(--rose)">
+              <span class="node-kicker">H · 公开听证</span>
+              <h3>强行召开公开听证</h3>
+              <p>证据足够则破局；证据不足时，系统与企业会共同封锁真相。</p>
+              <div class="tag-row"><small>A1</small><small>B1</small><small>C1</small><small>C2</small><small>D2</small></div>
+            </div>
+          </foreignObject>
+
+          <!-- Outcome notes -->
+          <foreignObject x="95" y="890" width="1195" height="95">
+            <div xmlns="http://www.w3.org/1999/xhtml" class="node-card root" style="--node-tone: var(--green)">
+              <span class="node-kicker">读图结论</span>
+              <h3>第一幕找谎言，第二幕问谎言保护什么，第三幕决定公开哪一种真相。</h3>
+              <p>A → A2 → F 是稳健破案路线；B → B1 → G 是证人保护路线；C → C2 → H 是高风险公开路线；D → D1 → G/F 是记忆恢复路线。</p>
+            </div>
+          </foreignObject>
+        </svg>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

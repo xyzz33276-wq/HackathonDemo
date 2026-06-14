@@ -7,5 +7,10 @@ if errorlevel 1 (
   exit /b 1
 )
 echo Deploying Neon Case to Vercel production...
-npx.cmd vercel --prod --yes
+where vercel >nul 2>nul
+if errorlevel 1 (
+  npx.cmd vercel --prod --yes
+) else (
+  vercel --prod --yes
+)
 pause

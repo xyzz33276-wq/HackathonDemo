@@ -7,9 +7,9 @@ let latestMetrics = null;
 let currentAct = 1;
 let finalCompleted = false;
 
-const selectedChoices = ["question-sora", "trade-mara", "trust-yue"];
+const selectedChoices = ["press-ren", "audit-security-bot", "expose-system"];
 const completedActs = new Set();
-const selectedClues = new Set(["memory-shard", "paper-note"]);
+const selectedClues = new Set(["elevator-gap", "paper-note"]);
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -21,9 +21,7 @@ function escapeHtml(value) {
 }
 
 async function init() {
-  const response = await fetch("/api/config");
-  if (!response.ok) throw new Error("无法加载案件配置");
-  config = await response.json();
+  config = await loadConfig();
   renderCase();
   renderStory();
   renderOverviews();
@@ -31,10 +29,21 @@ async function init() {
   renderChoices();
   renderClues();
   renderSuspects(config.suspects.map(initialSuspectState));
+  renderMetrics(config.baseState, "初始状态");
   renderDossiers();
-  renderMetrics(config.baseState, "初始态");
   bindEvents();
   setRunning(false);
+}
+
+async function loadConfig() {
+  try {
+    const response = await fetch("/api/config");
+    if (!response.ok) throw new Error("无法加载案件配置");
+    return await response.json();
+  } catch (error) {
+    if (window.neonCaseConfig) return window.neonCaseConfig;
+    throw error;
+  }
 }
 
 function bindEvents() {
@@ -63,6 +72,7 @@ function renderStory() {
 function renderOverviews() {
   $("characterOverview").innerHTML = config.caseFile.characterOverview.map((item) => `
     <article class="overview-card">
+      ${item.image ? imageTag(item.image, item.name, "overview-portrait") : ""}
       <span>${escapeHtml(item.role)}</span>
       <strong>${escapeHtml(item.name)}</strong>
       <p>${escapeHtml(item.text)}</p>
@@ -103,28 +113,31 @@ function renderCaseContext() {
 
 function renderChoices() {
   syncChoicesFrom(1);
-  $("choiceSlots").innerHTML = config.acts.map((act, index) => `
-    <div class="choice-slot ${choiceSlotClass(act.id)}">
-      <div class="slot-head">
-        <span>ACT ${act.id}</span>
-        <strong>${escapeHtml(act.title)}</strong>
+  $("choiceSlots").innerHTML = config.acts.map((act, index) => {
+    const selected = getChoice(selectedChoices[index]);
+    return `
+      <div class="choice-slot ${choiceSlotClass(act.id)}">
+        <div class="slot-head">
+          <span>ACT ${act.id}</span>
+          <strong>${escapeHtml(act.title)}</strong>
+        </div>
+        <select data-choice-slot="${index}" aria-label="${escapeHtml(act.title)}" ${act.id !== currentAct || running || finalCompleted ? "disabled" : ""}>
+          ${choicesForAct(act.id).map((choice) => `
+            <option value="${choice.id}" ${selectedChoices[index] === choice.id ? "selected" : ""}>${escapeHtml(choice.label)}</option>
+          `).join("")}
+        </select>
+        <p id="choice-desc-${index}">${escapeHtml(selected.description)}</p>
+        <div class="slot-status">${slotStatus(act.id)}</div>
+        ${lockedSlotOverlay(act.id)}
       </div>
-      <select data-choice-slot="${index}" aria-label="${escapeHtml(act.title)}" ${act.id !== currentAct || running || finalCompleted ? "disabled" : ""}>
-        ${choicesForAct(act.id).map((choice) => `
-          <option value="${choice.id}" ${selectedChoices[index] === choice.id ? "selected" : ""}>${escapeHtml(choice.label)}</option>
-        `).join("")}
-      </select>
-      <p id="choice-desc-${index}">${escapeHtml(getChoice(selectedChoices[index]).description)}</p>
-      <div class="slot-status">${slotStatus(act.id)}</div>
-    </div>
-  `).join("");
+    `;
+  }).join("");
 
   document.querySelectorAll("[data-choice-slot]").forEach((select) => {
     select.addEventListener("change", () => {
       const index = Number(select.dataset.choiceSlot);
       selectedChoices[index] = select.value;
       syncChoicesFrom(index + 2);
-      $(`choice-desc-${index}`).textContent = getChoice(select.value).description;
       renderChoices();
       updateCurrentActCopy();
     });
@@ -165,6 +178,12 @@ function slotStatus(actId) {
   return "等待上一幕完成";
 }
 
+function lockedSlotOverlay(actId) {
+  if (completedActs.has(actId) || (actId === currentAct && !finalCompleted)) return "";
+  const reason = finalCompleted ? "案件已结算" : "完成上一幕后解锁";
+  return `<div class="slot-lock" aria-hidden="true"><span>${reason}</span></div>`;
+}
+
 function renderClues() {
   $("clueList").innerHTML = config.clues.map((clue) => `
     <label class="clue-card ${selectedClues.has(clue.id) ? "active" : ""}">
@@ -188,53 +207,12 @@ function getChoice(id) {
   return config.choices.find((choice) => choice.id === id) || config.choices[0];
 }
 
-function renderCaseMap() {
-  const graph = config.caseFile.relationshipGraph;
-  const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
-  const edges = graph.edges.map((edge) => {
-    const from = nodes.get(edge.from);
-    const to = nodes.get(edge.to);
-    if (!from || !to) return "";
-    const mx = (from.x + to.x) / 2;
-    const my = (from.y + to.y) / 2;
-    return `
-      <line class="graph-edge" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />
-      <text class="graph-label" x="${mx}" y="${my}">${escapeHtml(edge.label)}</text>
-    `;
-  }).join("");
-
-  const nodeMarkup = graph.nodes.map((node) => `
-    <g class="graph-node ${node.tone}" transform="translate(${node.x} ${node.y})">
-      <circle r="5.8"></circle>
-      <text class="node-title" y="-8">${escapeHtml(node.label)}</text>
-      <text class="node-sub" y="11">${escapeHtml(node.sub)}</text>
-    </g>
-  `).join("");
-
-  $("caseMap").innerHTML = `
-    <svg viewBox="0 0 100 100" role="img" aria-label="人物关系与情节图谱">
-      ${edges}
-      ${nodeMarkup}
-    </svg>
-  `;
-}
-
-function initialSuspectState(suspect) {
-  return {
-    id: suspect.id,
-    trust: suspect.trust,
-    suspicion: suspect.suspicion,
-    concealment: suspect.concealment,
-    pressure: suspect.pressure
-  };
-}
-
 function resetInvestigation() {
   stopRun();
   currentAct = 1;
   finalCompleted = false;
-  completedActs.clear();
   latestMetrics = null;
+  completedActs.clear();
   $("liveFeed").innerHTML = "";
   $("reportBody").innerHTML = "<p>选择当前幕行动与公开线索后，点击“推演当前幕”。每一幕完成后才会解锁下一幕。</p>";
   $("endingMeta").textContent = "未生成";
@@ -246,7 +224,7 @@ function resetInvestigation() {
   $("riskBadge").className = "risk-pill neutral";
   renderChoices();
   renderSuspects(config.suspects.map(initialSuspectState));
-  renderMetrics(config.baseState, "初始态");
+  renderMetrics(config.baseState, "初始状态");
 }
 
 function prepareActRun() {
@@ -255,7 +233,7 @@ function prepareActRun() {
     $("liveFeed").innerHTML = "";
   }
   if (!finalCompleted) {
-    $("reportBody").innerHTML = "<p>推演进行中。角色证词会根据当前选择与公开线索动态变化。</p>";
+    $("reportBody").innerHTML = "<p>推演进行中。实时证词会说明：这个选择发现了什么、它证明了什么、它为什么会解锁下一幕。</p>";
     $("endingMeta").textContent = "推演中";
   }
   $("phaseTicker").textContent = "连接事件流";
@@ -316,7 +294,7 @@ function closeEventSource() {
 
 function setRunning(value) {
   running = value;
-  $("runButton").disabled = value;
+  $("runButton").disabled = value || finalCompleted;
   $("rerunButton").disabled = value;
   $("stopButton").disabled = !value;
   if (!value) updateCurrentActCopy();
@@ -329,6 +307,7 @@ function handleStart(data) {
 }
 
 function handleMetrics(data) {
+  if (!data.metrics) return;
   latestMetrics = data.metrics;
   renderMetrics(data.metrics, data.label);
   if (data.metrics.cast) renderSuspects(data.metrics.cast);
@@ -339,8 +318,8 @@ function handleActStart(data) {
   $("phaseTicker").textContent = `${data.act.title} · ${data.act.time}`;
   $("riskBadge").textContent = `${data.risk.label} ${data.risk.score}`;
   $("riskBadge").className = `risk-pill ${data.risk.tone}`;
-  appendSystem(`${data.act.title}：玩家选择「${data.choice.label}」`);
-  if (data.state.cast) renderSuspects(data.state.cast);
+  appendSystem(`${data.act.title}：玩家选择“${data.choice.label}”。`);
+  if (data.state?.cast) renderSuspects(data.state.cast);
 }
 
 function handleDialogue(item) {
@@ -365,8 +344,8 @@ function handleStateShift(data) {
   $("riskBadge").textContent = `${data.risk.label} ${data.risk.score}`;
   $("riskBadge").className = `risk-pill ${data.risk.tone}`;
   renderMetrics(data.state, data.label);
-  renderSuspects(data.state.cast);
-  appendSystem(`状态变化：真相 ${data.state.truth} / 记忆 ${data.state.memory} / 压力 ${data.state.pressure}`);
+  if (data.state?.cast) renderSuspects(data.state.cast);
+  appendSystem("局势更新：证词、线索权重和后续可选路径已改变。");
 }
 
 function handleStepComplete(data) {
@@ -379,7 +358,7 @@ function handleStepComplete(data) {
   $("riskBadge").textContent = `${data.risk.label} ${data.risk.score}`;
   $("riskBadge").className = `risk-pill ${data.risk.tone}`;
   renderMetrics(data.state, `第 ${data.completedAct} 幕后`);
-  renderSuspects(data.state.cast);
+  if (data.state?.cast) renderSuspects(data.state.cast);
   renderChoices();
   appendSystem(data.message);
 }
@@ -391,7 +370,61 @@ function appendSystem(text) {
   $("liveFeed").prepend(item);
 }
 
+function renderCaseMap() {
+  const mapNode = $("caseMap");
+  const graph = config.caseFile.relationshipGraph;
+  if (!mapNode || !graph) return;
+
+  const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
+  const clipDefs = graph.nodes.map((node, index) => node.image
+    ? `<clipPath id="node-clip-${index}"><circle r="6.1"></circle></clipPath>`
+    : "").join("");
+  const edges = graph.edges.map((edge) => {
+    const from = nodes.get(edge.from);
+    const to = nodes.get(edge.to);
+    if (!from || !to) return "";
+    const mx = (from.x + to.x) / 2;
+    const my = (from.y + to.y) / 2;
+    return `
+      <line class="graph-edge" x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />
+      <text class="graph-label" x="${mx}" y="${my}">${escapeHtml(edge.label)}</text>
+    `;
+  }).join("");
+
+  const nodeMarkup = graph.nodes.map((node, index) => `
+    <g class="graph-node ${escapeHtml(node.tone)}" transform="translate(${node.x} ${node.y})">
+      ${node.image
+        ? `<image class="node-image" href="${escapeHtml(node.image)}" x="-6.1" y="-6.1" width="12.2" height="12.2" preserveAspectRatio="xMidYMid slice" clip-path="url(#node-clip-${index})"></image><circle class="node-frame" r="6.3"></circle>`
+        : `<circle class="node-frame no-image" r="5.8"></circle>`}
+      <text class="node-title" y="-8">${escapeHtml(node.label)}</text>
+      <text class="node-sub" y="11">${escapeHtml(node.sub)}</text>
+    </g>
+  `).join("");
+
+  mapNode.innerHTML = `
+    <svg viewBox="0 0 100 100" role="img" aria-label="人物关系与情节图谱">
+      <defs>${clipDefs}</defs>
+      ${edges}
+      ${nodeMarkup}
+    </svg>
+  `;
+}
+
+function initialSuspectState(suspect) {
+  return {
+    id: suspect.id,
+    trust: suspect.trust,
+    suspicion: suspect.suspicion,
+    concealment: suspect.concealment,
+    pressure: suspect.pressure
+  };
+}
+
 function renderMetrics(metrics, label) {
+  const metaNode = $("metricMeta");
+  const gridNode = $("metricsGrid");
+  if (!metaNode || !gridNode) return;
+
   const rows = [
     ["truth", "真相闭合度", "cyan"],
     ["memory", "记忆恢复", "green"],
@@ -399,8 +432,8 @@ function renderMetrics(metrics, label) {
     ["trust", "整体信任", "amber"],
     ["systemSuspicion", "系统嫌疑", "violet"]
   ];
-  $("metricMeta").textContent = label;
-  $("metricsGrid").innerHTML = rows.map(([key, title, tone]) => {
+  metaNode.textContent = label;
+  gridNode.innerHTML = rows.map(([key, title, tone]) => {
     const value = Number(metrics[key] || 0);
     return `
       <div class="metric-card">
@@ -417,17 +450,21 @@ function renderMetrics(metrics, label) {
 }
 
 function renderSuspects(castState) {
+  const gridNode = $("suspectGrid");
+  if (!gridNode) return;
+
   const stateMap = new Map(castState.map((item) => [item.id, item]));
-  $("suspectGrid").innerHTML = config.suspects.map((suspect) => {
+  gridNode.innerHTML = config.suspects.map((suspect) => {
     const state = stateMap.get(suspect.id) || initialSuspectState(suspect);
     const heat = Math.max(state.suspicion, state.concealment);
     return `
       <article class="suspect-card ${suspect.color}" style="--heat:${heat}%">
+        ${imageTag(suspect.image, suspect.name, "suspect-portrait")}
         <div class="suspect-head">
           <span>${escapeHtml(suspect.role)}</span>
           <strong>${escapeHtml(suspect.name)}</strong>
         </div>
-        <p>${escapeHtml(suspect.firstImpression)}</p>
+        <p>${escapeHtml(suspect.firstImpression || suspect.signal)}</p>
         <div class="suspect-signal">${escapeHtml(suspect.signal)}</div>
         <div class="mini-bars">
           ${miniBar("信任", state.trust, "green")}
@@ -442,7 +479,7 @@ function renderSuspects(castState) {
 function miniBar(label, value, tone) {
   return `
     <div class="mini-bar">
-      <span>${label}</span>
+      <span>${escapeHtml(label)}</span>
       <div><i class="${tone}" style="width:${value}%"></i></div>
       <strong>${value}</strong>
     </div>
@@ -452,6 +489,7 @@ function miniBar(label, value, tone) {
 function renderDossiers() {
   $("dossierGrid").innerHTML = config.suspects.map((suspect) => `
     <article class="dossier-card ${suspect.color}">
+      ${imageTag(suspect.image, suspect.name, "dossier-portrait")}
       <div class="dossier-title">
         <span>${escapeHtml(suspect.role)}</span>
         <strong>${escapeHtml(suspect.name)}</strong>
@@ -468,10 +506,15 @@ function renderDossiers() {
 function dossierRow(label, text) {
   return `
     <div class="dossier-row">
-      <span>${label}</span>
+      <span>${escapeHtml(label)}</span>
       <p>${escapeHtml(text)}</p>
     </div>
   `;
+}
+
+function imageTag(src, alt, className) {
+  if (!src) return "";
+  return `<img class="${escapeHtml(className)}" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" />`;
 }
 
 function renderReport(report) {
@@ -482,7 +525,7 @@ function renderReport(report) {
   $("phaseTicker").textContent = "三幕推演完成";
   $("endingMeta").textContent = report.title;
   $("reportBody").innerHTML = `
-    <div class="ending-card ${report.tone}">
+    <div class="ending-card ${escapeHtml(report.tone)}">
       <span>ENDING</span>
       <strong>${escapeHtml(report.title)}</strong>
       <p>${escapeHtml(report.summary)}</p>
@@ -506,8 +549,9 @@ function renderReport(report) {
     </div>
   `;
   if (report.finalState) {
-    renderMetrics(report.finalState, "最终态");
-    renderSuspects(report.finalState.cast);
+    latestMetrics = report.finalState;
+    renderMetrics(report.finalState, "最终状态");
+    if (report.finalState.cast) renderSuspects(report.finalState.cast);
   }
   renderChoices();
   updateCurrentActCopy();
@@ -519,8 +563,8 @@ function updateCurrentActCopy() {
   $("stepMeta").textContent = finalCompleted ? "三幕已完成" : `第 ${currentAct} 幕${running ? "推演中" : "待推演"}`;
   $("currentActTitle").textContent = finalCompleted ? "案件已结算" : act.title;
   $("currentActHint").textContent = finalCompleted
-    ? "可以点击顶部 RUN 重置调查，尝试另一条真相路径。"
-    : `${act.focus}。当前行动：${getChoice(selectedChoices[currentAct - 1]).label}`;
+    ? "可以点击顶部“重置”重新调查，尝试另一条真相路线。"
+    : `${act.focus} 当前行动：${getChoice(selectedChoices[currentAct - 1]).label}`;
   $("runButton").querySelector("span").textContent = finalCompleted ? "推演已完成" : `推演第 ${currentAct} 幕`;
   $("runButton").disabled = running || finalCompleted;
 }
@@ -528,5 +572,14 @@ function updateCurrentActCopy() {
 init().catch((error) => {
   $("streamState").textContent = "启动失败";
   $("phaseTicker").textContent = error.message;
+  renderArchiveError(error);
   console.error(error);
 });
+
+function renderArchiveError(error) {
+  const message = escapeHtml(error.message || "案件加载失败，请刷新页面");
+  ["openingStory", "characterOverview", "timelineList", "truthThreads", "dossierGrid"].forEach((id) => {
+    const node = $(id);
+    if (node) node.innerHTML = `<article class="archive-error">${message}</article>`;
+  });
+}
