@@ -653,7 +653,7 @@ if (require.main === module) {
   });
 
   server.listen(port, "0.0.0.0", () => {
-    console.log(`Neon Case 已启动：http://127.0.0.1:${port}`);
+    console.log(`Neon Case 已启动：http://0.0.0.0:${port}`);
   });
 }
 
