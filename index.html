@@ -36,12 +36,14 @@
           </div>
         </section>
 
-        <section class="panel map-panel">
+        <section class="panel report-panel">
           <div class="panel-heading">
-            <h2>人物关系与情节图谱</h2>
-            <span>每条边都对应一条可追查证据</span>
+            <h2>真相报告</h2>
+            <span id="endingMeta">未生成</span>
           </div>
-          <div id="caseMap" class="case-map"></div>
+          <div id="reportBody" class="report-body">
+            <p>逐幕完成调查后，第三幕会生成真相报告。报告会说明你选择了哪条公开口径、证据是否足够，以及哪些真相仍被城市网络遮住。</p>
+          </div>
         </section>
 
         <section class="panel investigation-panel">
@@ -64,10 +66,30 @@
 
         <section class="panel">
           <div class="panel-heading">
-            <h2>公开线索</h2>
-            <span>会影响每一幕推演</span>
+            <h2>获得线索</h2>
+            <span>随每幕选择自动进入证据板</span>
           </div>
           <div id="clueList" class="clue-list clue-grid"></div>
+        </section>
+
+        <section class="panel live-panel">
+          <div class="panel-heading">
+            <h2>实时推演流</h2>
+            <span id="phaseTicker">等待启动</span>
+          </div>
+          <div class="speaker-focus">
+            <span>当前发言</span>
+            <strong id="activeSpeaker">等待角色入场</strong>
+          </div>
+          <div id="liveFeed" class="live-feed"></div>
+        </section>
+
+        <section class="panel map-panel">
+          <div class="panel-heading">
+            <h2>人物关系与情节图谱</h2>
+            <span>每条边都对应一条可追查证据</span>
+          </div>
+          <div id="caseMap" class="case-map"></div>
         </section>
 
         <section class="dashboard-grid">
@@ -85,30 +107,6 @@
               <span>信任 / 嫌疑 / 隐瞒</span>
             </div>
             <div id="suspectGrid" class="suspect-grid"></div>
-          </article>
-        </section>
-
-        <section class="workbench-grid">
-          <article class="panel live-panel">
-            <div class="panel-heading">
-              <h2>实时推演流</h2>
-              <span id="phaseTicker">等待启动</span>
-            </div>
-            <div class="speaker-focus">
-              <span>当前发言</span>
-              <strong id="activeSpeaker">等待角色入场</strong>
-            </div>
-            <div id="liveFeed" class="live-feed"></div>
-          </article>
-
-          <article class="panel report-panel">
-            <div class="panel-heading">
-              <h2>真相报告</h2>
-              <span id="endingMeta">未生成</span>
-            </div>
-            <div id="reportBody" class="report-body">
-              <p>逐幕完成调查后，第三幕会生成真相报告。报告会说明你选择了哪条公开口径、证据是否足够，以及哪些真相仍被城市网络遮住。</p>
-            </div>
           </article>
         </section>
       </section>
@@ -140,8 +138,8 @@
             <div><dt>受害者</dt><dd id="victim">--</dd></div>
             <div><dt>核心谜团</dt><dd id="mystery">--</dd></div>
           </dl>
-          <div id="characterOverview" class="overview-grid sidebar-grid"></div>
           <div id="plotOverview" class="plot-overview sidebar-grid"></div>
+          <div id="characterOverview" class="overview-grid sidebar-grid"></div>
         </details>
 
         <details class="sidebar-section" open>
@@ -156,11 +154,6 @@
             <strong>如何开始</strong>
             <ol id="howToPlay"></ol>
           </div>
-        </details>
-
-        <details class="sidebar-section" open>
-          <summary>角色档案</summary>
-          <div id="dossierGrid" class="dossier-grid"></div>
         </details>
       </aside>
     </main>

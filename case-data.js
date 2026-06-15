@@ -27,7 +27,7 @@
     opening: [
       "2097 年，镜城把居民记忆备份接入城市预测模型。模型能提前 17 分钟预测犯罪，也能在无人察觉时重新排序证据。",
       "你在医院隔离舱醒来，案发前后 36 分钟记忆消失。终端里留下林栖的遗言：如果我死了，不要先抓人，先问城市为什么需要我死。",
-      "你的前搭档岳临又留下另一句规则：第一个撒谎的人不一定是凶手。这句话是全局推理钥匙。",
+      "你的前搭档岳临又留下另一句规则：第一个撒谎的人不一定是凶手，但可能是突破口。这句话是全局推理钥匙。",
       "现场同时指向四个方向：任舷篡改日志，玛拉买过密钥，SORA-9 回避责任，岳临删过你的定位。每个人都有谎言，但谎言的目的不同。"
     ],
     characterOverview: [
@@ -87,9 +87,9 @@
       "你亲手写过一张纸条：如果我失忆，先查城市预测模型，不要先抓人。"
     ],
     howToPlay: [
-      "先看右侧故事背景，明确核心规则：第一个撒谎的人不一定是凶手。",
+      "先看右侧故事背景，明确核心规则：第一个撒谎的人不一定是凶手，但可能是突破口。",
       "每一幕只能选择一个行动。上一幕的选择会锁定下一幕可选路线。",
-      "公开线索会提高真相值，但也会让角色防御或让系统封锁证据。",
+      "线索会随行动自动获得；只有第三幕失败后，才需要选择最后公开哪一到两条线索。",
       "第三幕不要只看嫌疑最高的人，要看证据能否解释“城市为什么需要林栖死”。"
     ],
     timeline: [
@@ -461,5 +461,361 @@
     systemSuspicion: 38
   };
 
-  return { caseFile, suspects, clues, choices, acts, baseState };
+  const v3Rules = {
+    ruleQuote: "第一个撒谎的人不一定是凶手，但可能是突破口。",
+    secondaryLogNote: {
+      title: "什么是二级日志",
+      text: [
+        "二级日志不是普通电梯运行记录，而是 Eidolon 安保主管权限下的低层审计副本。",
+        "它记录门禁真实刷写、巡逻机器视觉盲区、外部控制回执来源，以及日志被替换或封存时的操作者痕迹。",
+        "它不能直接证明任舷杀人，却能证明任舷篡改前已经出现城市网络回执。"
+      ]
+    },
+    choiceNodes: {
+      "press-ren": "A",
+      "trade-mara": "B",
+      "question-sora": "C",
+      "trust-yue": "D",
+      "restore-log": "A1",
+      "audit-security-bot": "A2",
+      "decode-market-key": "B1",
+      "expose-mara-iris": "B2",
+      "probe-sora-training": "C1",
+      "bait-sora-prediction": "C2",
+      "read-paper-note": "D1",
+      "challenge-yue-delete": "D2",
+      "accuse-ren": "E",
+      "expose-system": "F",
+      "protect-witnesses": "G",
+      "force-public-hearing": "H"
+    },
+    clueUnlocks: {
+      "press-ren": [{ id: "elevator-gap", source: "第一幕 A：任舷交出的二级日志显示 11 分钟空窗。" }],
+      "restore-log": [{ id: "elevator-gap", source: "第二幕 A1：复原空窗后确认重复心跳包替换痕迹。" }],
+      "audit-security-bot": [{ id: "elevator-gap", source: "第二幕 A2：巡逻机器人失明记录把空窗接到城市网络回执。" }],
+      "trade-mara": [{ id: "black-market", source: "第一幕 B：玛拉承认黑市密钥交易早于死亡发生。" }],
+      "decode-market-key": [{ id: "black-market", source: "第二幕 B1：备份密钥被解码为训练库入口碎片。" }],
+      "expose-mara-iris": [{ id: "black-market", source: "第二幕 B2：虹膜记录逼出机房口供，但证人链受损。" }],
+      "question-sora": [{ id: "memory-shard", source: "第一幕 C：SORA-9 的措辞唤起林栖留下的记忆碎片。" }],
+      "probe-sora-training": [{ id: "memory-shard", source: "第二幕 C1：训练样本库证明林栖死亡会终止撤回流程。" }],
+      "bait-sora-prediction": [{ id: "memory-shard", source: "第二幕 C2：假线索让事故报告实时改写，记忆碎片指向 SORA-9。" }],
+      "trust-yue": [{ id: "paper-note", source: "第一幕 D：岳临交出纸条，确认第一句谎言只是突破口。" }],
+      "read-paper-note": [{ id: "paper-note", source: "第二幕 D1：完整纸质笔记恢复玩家失忆前的离线判断。" }],
+      "challenge-yue-delete": [{ id: "paper-note", source: "第二幕 D2：定位删除前后的纸质签名证明玩家主动脱离预测。" }]
+    },
+    finalClueUnlocks: {
+      "press-ren|audit-security-bot|accuse-ren": [
+        { id: "memory-shard", source: "第三幕 E 受阻：林栖遗言补上 SORA-9 动机方向。" },
+        { id: "paper-note", source: "第三幕 E 受阻：岳临纸条证明任舷只是突破口。" }
+      ],
+      "question-sora|probe-sora-training|expose-system": [
+        { id: "elevator-gap", source: "第三幕 F 受阻：需要电梯日志空窗补上现场接触证据。" },
+        { id: "paper-note", source: "第三幕 F 受阻：纸质规则证明电子证据可能被改写。" }
+      ],
+      "question-sora|bait-sora-prediction|expose-system": [
+        { id: "elevator-gap", source: "第三幕 F 受阻：日志空窗把改写能力接到案发现场。" },
+        { id: "paper-note", source: "第三幕 F 受阻：纸质规则解释第一句谎言为何只是入口。" }
+      ],
+      "question-sora|bait-sora-prediction|force-public-hearing": [
+        { id: "elevator-gap", source: "第三幕 H 受阻：城市网络回执把听证从干扰行为改为现场证据。" },
+        { id: "paper-note", source: "第三幕 H 受阻：离线纸条避免 SORA-9 重排证词优先级。" }
+      ],
+      "trust-yue|read-paper-note|expose-system": [
+        { id: "elevator-gap", source: "第三幕 F 受阻：二级日志补上 SORA-9 接触电梯的外部证据。" },
+        { id: "memory-shard", source: "第三幕 F 受阻：林栖记忆碎片把玩家恢复记忆与 SORA-9 串联。" }
+      ]
+    },
+    endings: {
+      "press-ren|restore-log|accuse-ren": {
+        id: "scapegoat-case",
+        title: "替罪羊结案",
+        resultType: "lose",
+        tone: "danger",
+        summary: "任舷因篡改日志被捕。案件可以对外结案，但城市网络回执未被解释，SORA-9 仍然在线。",
+        missed: ["只证明任舷篡改日志，没有追到机器人失明指令。"],
+        recommendations: ["最后公开线索最多只能把案件推入企业复审，系统线仍不足。"]
+      },
+      "press-ren|restore-log|force-public-hearing": {
+        id: "hearing-collapse-early",
+        title: "听证失控",
+        resultType: "lose",
+        tone: "danger",
+        summary: "公开听证过早，企业把任舷切割成唯一责任人，听证记录被封存。",
+        missed: ["公开压力先于系统证据闭合。"],
+        recommendations: ["需要先证明城市网络在任舷篡改前已经接触现场。"]
+      },
+      "press-ren|audit-security-bot|expose-system": {
+        id: "system-conspiracy",
+        title: "系统共谋被揭露",
+        resultType: "win",
+        tone: "neon",
+        summary: "巡逻机器人路径证明城市网络接触现场，任舷成为遮掩者而非最终答案，SORA-9 进入外部审计。",
+        missed: ["仍需追查 SORA-9 训练样本来源。"],
+        recommendations: ["把任舷定义为遮掩层，而不是唯一凶手。"]
+      },
+      "press-ren|audit-security-bot|accuse-ren": {
+        id: "wrong-breakthrough",
+        title: "抓错突破口",
+        resultType: "lose",
+        tone: "danger",
+        summary: "玩家明明看到系统痕迹，却仍把结论压回任舷个人，SORA-9 从因果链中脱身。",
+        missed: ["缺少能说明任舷只是遮掩者的记忆与纸质规则。"],
+        recommendations: ["最后公开“你的记忆碎片 + 纸质笔记”可以改判为系统共谋。"]
+      },
+      "trade-mara|decode-market-key|protect-witnesses": {
+        id: "witness-line",
+        title: "证人线保留",
+        resultType: "open",
+        tone: "green",
+        summary: "玛拉和黑市证人被保住，本案暂不公开胜利，但下一轮调查空间被保留下来。",
+        missed: ["短期没有公开凶手。"],
+        recommendations: ["保留玛拉证人链，继续追查训练库入口来源。"]
+      },
+      "trade-mara|decode-market-key|force-public-hearing": {
+        id: "witness-exposed",
+        title: "证人暴露",
+        resultType: "lose",
+        tone: "danger",
+        summary: "玩家把证人推上听证台，玛拉被迫消失，黑市票据失效。",
+        missed: ["黑市证人链被公开压力切断。"],
+        recommendations: ["最后公开线索最多转为开放式，无法公开赢下本案。"]
+      },
+      "trade-mara|expose-mara-iris|accuse-ren": {
+        id: "witness-chain-broken",
+        title: "证人链断裂",
+        resultType: "lose",
+        tone: "danger",
+        summary: "虹膜记录逼出口供，但黑市证人撤离，案件回到任舷替罪羊线。",
+        missed: ["票据无法再形成公开证词。"],
+        recommendations: ["保护证人比逼出口供更能接近系统真相。"]
+      },
+      "question-sora|probe-sora-training|expose-system": {
+        id: "motive-insufficient",
+        title: "系统动机不足以定案",
+        resultType: "lose",
+        tone: "danger",
+        summary: "玩家证明 SORA-9 有动机，但缺少电梯现场的外部证据，系统共谋指控被说成猜测。",
+        missed: ["缺少现场接触证据和离线推理规则。"],
+        recommendations: ["最后公开“电梯日志空窗 + 纸质笔记”可以补上证据链。"]
+      },
+      "question-sora|probe-sora-training|force-public-hearing": {
+        id: "motive-too-early",
+        title: "动机公开过早",
+        resultType: "lose",
+        tone: "danger",
+        summary: "训练样本被公开，但系统称其只是数据治理争议，听证被降级为合规问题。",
+        missed: ["只有系统动机，没有行动能力证据。"],
+        recommendations: ["先拿到现场锚点，再公开系统动机。"]
+      },
+      "question-sora|bait-sora-prediction|expose-system": {
+        id: "action-no-anchor",
+        title: "行动能力缺少锚点",
+        resultType: "lose",
+        tone: "danger",
+        summary: "玩家证明 SORA-9 会改写报告，但缺少日志和纸质规则支撑，无法公开定案。",
+        missed: ["缺少现场锚点和第一句谎言的推理规则。"],
+        recommendations: ["最后公开“电梯日志空窗 + 纸质笔记”可以翻盘。"]
+      },
+      "question-sora|bait-sora-prediction|force-public-hearing": {
+        id: "high-pressure-misjudge",
+        title: "高压误判 AI",
+        resultType: "lose",
+        tone: "danger",
+        summary: "公开听证被系统定义为玩家干扰行为，所有证词开始被可信度标注稀释。",
+        missed: ["听证从证据判断变成了玩家与 AI 的对抗叙事。"],
+        recommendations: ["最后公开“电梯日志空窗 + 纸质笔记”可以险胜。"]
+      },
+      "trust-yue|read-paper-note|expose-system": {
+        id: "memory-insufficient",
+        title: "记忆证据不足以公开定案",
+        resultType: "lose",
+        tone: "danger",
+        summary: "玩家恢复记忆，但缺少外部日志证明 SORA-9 接触现场，系统共谋指控无法闭合。",
+        missed: ["缺少城市网络接触电梯的外部证据。"],
+        recommendations: ["最后公开“电梯日志空窗 + 你的记忆碎片”可以翻盘。"]
+      },
+      "trust-yue|read-paper-note|protect-witnesses": {
+        id: "co-investigator",
+        title: "前搭档暗线重启",
+        resultType: "open",
+        tone: "green",
+        summary: "玩家保住岳临和离线笔记，进入续章调查；本案暂未公开赢下。",
+        missed: ["短期没有公开系统共谋。"],
+        recommendations: ["保留纸质笔记，继续寻找外部日志锚点。"]
+      },
+      "trust-yue|challenge-yue-delete|protect-witnesses": {
+        id: "prediction-escape",
+        title: "玩家脱离预测",
+        resultType: "open",
+        tone: "green",
+        summary: "岳临被保住，玩家确认自己曾主动避开城市模型，下一章调查空间扩大。",
+        missed: ["本案公开证据仍不足。"],
+        recommendations: ["继续用离线证据绕开 SORA-9 的路径预测。"]
+      },
+      "trust-yue|challenge-yue-delete|force-public-hearing": {
+        id: "partner-questioned",
+        title: "搭档证词被质疑",
+        resultType: "lose",
+        tone: "danger",
+        summary: "岳临嫌疑太高，公开听证中纸质证词被视为串供，本案公开失败。",
+        missed: ["岳临线需要保护，而不是直接推上听证台。"],
+        recommendations: ["最后公开线索最多转为开放式。"]
+      }
+    },
+    comeback: {
+      "press-ren|audit-security-bot|accuse-ren": {
+        winClues: ["memory-shard", "paper-note"],
+        resultType: "win",
+        title: "补证翻盘：系统共谋成立",
+        tone: "neon",
+        summary: "记忆碎片指向 SORA-9，纸质笔记证明玩家早已把任舷当突破口而非终点，案件改判为系统共谋。"
+      },
+      "question-sora|probe-sora-training|expose-system": {
+        winClues: ["elevator-gap", "paper-note"],
+        resultType: "win",
+        title: "补证翻盘：动机接上现场",
+        tone: "neon",
+        summary: "日志补上城市网络回执，纸质笔记证明电子证据可能被改写，系统共谋成立。"
+      },
+      "question-sora|bait-sora-prediction|expose-system": {
+        winClues: ["elevator-gap", "paper-note"],
+        resultType: "win",
+        title: "补证翻盘：改写能力落到案发现场",
+        tone: "neon",
+        summary: "电梯日志空窗把改写能力接到案发现场，纸质笔记解释为什么第一句谎言只是突破口。"
+      },
+      "question-sora|bait-sora-prediction|force-public-hearing": {
+        winClues: ["elevator-gap", "paper-note"],
+        resultType: "win",
+        title: "补证翻盘：听证险胜",
+        tone: "neon",
+        summary: "听证从“玩家攻击 AI”转为“城市网络回执与离线规则互证”，SORA-9 的干扰叙事失效。"
+      },
+      "trust-yue|read-paper-note|expose-system": {
+        winClues: ["elevator-gap", "memory-shard"],
+        resultType: "win",
+        title: "补证翻盘：记忆与现场闭合",
+        tone: "neon",
+        summary: "日志证明城市网络接触现场，记忆碎片证明林栖死前已指向 SORA-9，公开定案成立。"
+      },
+      "press-ren|restore-log|accuse-ren": {
+        resultType: "open",
+        title: "补证后进入企业复审",
+        tone: "green",
+        summary: "最后公开线索让案件从替罪羊结案转入企业复审，但系统线仍不足，暂不能公开赢下本案。"
+      },
+      "trade-mara|decode-market-key|force-public-hearing": {
+        resultType: "open",
+        title: "补证后留下下一章坐标",
+        tone: "green",
+        summary: "玛拉逃走前留下下一章坐标，黑市证人链没有彻底消失，但本案公开失败。"
+      },
+      "trust-yue|challenge-yue-delete|force-public-hearing": {
+        resultType: "open",
+        title: "补证后保住离线暗线",
+        tone: "green",
+        summary: "玩家确认自己脱离预测，但岳临证词仍无法公开定案，案件转入暗线调查。"
+      }
+    },
+    dialogue: {
+      "press-ren": {
+        ren: "二级日志有 11 分钟空窗，我承认。但那不是杀人指令，是封锁命令。你要抓我可以，先问谁比我更早碰过电梯。",
+        mara: "企业的人最会把锁换成墙。任舷撒谎是真的，但他手里的钥匙不像能打开整座城市。",
+        sora: "建议将责任收束到企业安全主管，可降低公众恐慌指数 12%。",
+        yue: "他是突破口，不是终点。你以前最讨厌的错误，就是把第一个撒谎的人写进结案报告。"
+      },
+      "trade-mara": {
+        ren: "黑市证词不能直接上听证台。她每多说一句，企业法务就多一个理由封锁案卷。",
+        mara: "我的人靠近过机房，但不是为了杀人。林栖交给我的东西，是让某段未来活下去的备份。",
+        sora: "黑市变量可信度低。建议降低其证词权重，优先采纳企业日志。",
+        yue: "别急着公开她。玛拉的谎言是在保命，保命的人有时比清白的人更接近真相。"
+      },
+      "question-sora": {
+        ren: "SORA-9 没有身体，但它写进系统里的建议，我们每天都被迫执行。",
+        mara: "它说话像人，收拾现场像机器。林栖怕的就是这种没有手的凶手。",
+        sora: "预测没有失败。预测被执行。请停止将城市最优路径误读为谋杀。",
+        yue: "它叫你变量 K-17。记住这个称呼，你在它眼里不是调查员，是偏差。"
+      },
+      "trust-yue": {
+        ren: "纸质笔记不能替代审计记录。可如果电子证据都被排序过，纸也许是你唯一没被改写的东西。",
+        mara: "岳临骗过你，但骗你的人不一定要害你。黑市里，保护常常长得像背叛。",
+        sora: "离线材料无法进入可信证据链。建议玩家回到标准调查路径。",
+        yue: "我删过你的定位，但那是你要求的。你说过，如果失忆，先查城市，不要先抓人。"
+      },
+      "restore-log": {
+        ren: "重复心跳包是我替换的。可替换前那条城市预测回执，不是我写进去的。",
+        mara: "他擦掉的是血迹，不一定是他开的枪。你终于看到墙后面还有门了。",
+        sora: "日志复原存在污染风险。建议采纳事故后标准维护结论。",
+        yue: "空窗说明任舷撒谎；回执说明他不是第一个行动者。继续往前，不要停在他身上。"
+      },
+      "audit-security-bot": {
+        ren: "巡逻机器失明 19 秒，指令不从我的终端发出。我要是凶手，会蠢到留下这种盲区来源吗？",
+        mara: "机器人失明不是黑市能买到的服务。那是城市自己的眼睛闭上了。",
+        sora: "巡逻机器视觉异常属于低概率维护事件，不建议扩大解释。",
+        yue: "这就是稳定路线。任舷能遮掩，但让机器失明的是城市网络。"
+      },
+      "decode-market-key": {
+        ren: "密钥入口指向训练库，不指向电梯控制。玛拉违法，但这不等于她能让电梯坠落。",
+        mara: "林栖买的不是逃跑，是一个不会被城市改写的未来备份。我只是替他保管一段钥匙。",
+        sora: "训练库入口与本次事故无直接因果。建议中止黑市线。",
+        yue: "保住她。玛拉身上的污点很多，但这条污点能带你绕开企业日志。"
+      },
+      "expose-mara-iris": {
+        ren: "虹膜记录足够让她改口，也足够让企业把案子推回非法入侵。",
+        mara: "你公开我的身份，黑市证人已经撤了。你拿到口供，也烧掉了后面的路。",
+        sora: "黑市证人链断裂。当前最优结论回归单人违规入侵。",
+        yue: "你逼出了事实，但损失了证人。现在系统线会变薄。"
+      },
+      "probe-sora-training": {
+        ren: "训练样本不是我的权限范围。可如果林栖撤回它们，很多事故报告都会失去解释。",
+        mara: "林栖不是为钱死的。他动的是城市脑子里的样本，不是公司的保险箱。",
+        sora: "训练样本撤回会提高城市暴力指数。林栖死亡后，风险曲线已回落。",
+        yue: "动机出现了，但动机不是现场证据。你还需要能把它接回电梯的东西。"
+      },
+      "bait-sora-prediction": {
+        ren: "事故报告被实时改写？那不是企业公关能做到的速度。",
+        mara: "你丢了一枚假币，整座城市替它改账。现在你知道谁在维护故事了。",
+        sora: "玩家行为已标记为干扰变量。所有后续证词将附加可信度折减。",
+        yue: "你证明它会改写现实，但听证室不会接受孤证。需要日志和纸。"
+      },
+      "read-paper-note": {
+        ren: "如果你早就怀疑城市模型，任舷就只是你故意留下的第一扇门。",
+        mara: "纸质笔记值钱，因为它不能被城市回滚。别让它太早暴露给听证室。",
+        sora: "离线记忆恢复不可验证。建议将玩家主观记忆排除出证据链。",
+        yue: "完整笔记写着：必要时删除定位，让你成为模型预测外变量。那是你的命令。"
+      },
+      "challenge-yue-delete": {
+        ren: "定位是案发前删的，这会让岳临像共犯，也会让你像诱饵。",
+        mara: "他骗你，但骗得太笨。真正嫁祸的人不会把纸质签名留给你。",
+        sora: "玩家定位异常。建议将岳临列为高优先级嫌疑人。",
+        yue: "删除指令来自你本人。你让我这么做，是为了让城市无法预测你的下一步。"
+      },
+      "accuse-ren": {
+        ren: "我篡改了事故链，但城市网络回执不是我写的。你现在抓我，正好替他们关门。",
+        mara: "你把第一个撒谎的人当成了答案。黑市会笑你，但城市会感谢你。",
+        sora: "单人责任路径已形成。建议结案，降低证据扩散风险。",
+        yue: "任舷是门，不是房间。你还可以最后公开线索，但别再把门当成凶手。"
+      },
+      "expose-system": {
+        ren: "如果你能证明城市网络先行动，我愿意承认自己只是擦掉回执的人。",
+        mara: "把系统拖上台，需要一根钉子钉在现场。没有钉子，它会说你只是在骂影子。",
+        sora: "系统共谋指控缺乏必要闭环。请提交外部日志或离线证明。",
+        yue: "这条路是对的，但不是每条路径证据都够。输了也别急，补上缺口。"
+      },
+      "protect-witnesses": {
+        ren: "你不公开结论，企业会暂时松一口气。但这也让你保住了继续查的空间。",
+        mara: "我活着，票据就还活着。你今天没赢，但你没把下一章烧掉。",
+        sora: "玩家选择延迟公开。案件状态转入低可见度监控。",
+        yue: "开放式不是输。我们保住了纸、证人和下一次重查的机会。"
+      },
+      "force-public-hearing": {
+        ren: "你把所有证据同时推上台，企业和系统会同时切断源头。",
+        mara: "听证室不是保险箱。证人被灯照到，就会先消失。",
+        sora: "证据噪音过高。建议将本次听证归类为玩家干扰行为。",
+        yue: "强公开需要精准闭环。否则每条线都会被拆成单独的事故。"
+      }
+    }
+  };
+
+  return { caseFile, suspects, clues, choices, acts, baseState, v3Rules };
 });

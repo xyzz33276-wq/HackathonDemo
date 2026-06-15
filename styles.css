@@ -66,8 +66,7 @@ button {
 .slot-head span,
 .clue-type,
 .timeline-item time,
-.thread-card span,
-.dossier-title span {
+.thread-card span {
   font-family: "JetBrains Mono", Consolas, monospace;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -298,10 +297,47 @@ button {
   margin: 0 0 12px;
 }
 
+.rule-quote {
+  margin: 14px 16px 12px;
+  padding: 14px;
+  border-left: 3px solid var(--cyan);
+  background: linear-gradient(135deg, rgba(40, 215, 232, 0.13), rgba(244, 184, 79, 0.08));
+  border-radius: 7px;
+  color: #f4fbff;
+  font-family: "Georgia", "KaiTi", "STKaiti", serif;
+  font-size: 19px;
+  font-style: italic;
+  line-height: 1.55;
+}
+
+.log-note {
+  margin: 0 14px 14px;
+  border: 1px solid rgba(244, 184, 79, 0.34);
+  background: rgba(244, 184, 79, 0.075);
+  border-radius: 7px;
+  padding: 12px;
+}
+
+.log-note strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--amber);
+}
+
+.log-note p {
+  color: #d9c99f;
+  font-size: 12px;
+  line-height: 1.65;
+  margin: 0 0 8px;
+}
+
+.log-note p:last-child {
+  margin-bottom: 0;
+}
+
 .case-sidebar .story-copy:empty::before,
 .case-sidebar .timeline-list:empty::before,
 .case-sidebar .truth-threads:empty::before,
-.case-sidebar .dossier-grid:empty::before,
 .case-sidebar .overview-grid:empty::before {
   content: "档案加载中";
   display: block;
@@ -402,16 +438,14 @@ button {
 .sidebar-grid,
 .case-sidebar .overview-grid,
 .case-sidebar .plot-overview,
-.case-sidebar .truth-threads,
-.case-sidebar .dossier-grid {
+.case-sidebar .truth-threads {
   grid-template-columns: 1fr;
 }
 
 .case-sidebar .overview-grid,
 .case-sidebar .plot-overview,
 .case-sidebar .timeline-list,
-.case-sidebar .truth-threads,
-.case-sidebar .dossier-grid {
+.case-sidebar .truth-threads {
   padding: 0 14px 14px;
 }
 
@@ -494,6 +528,7 @@ button {
 .clue-card.active {
   border-color: rgba(40, 215, 232, 0.55);
   background: rgba(40, 215, 232, 0.07);
+  grid-template-columns: 1fr;
 }
 
 .clue-card input {
@@ -506,9 +541,34 @@ button {
   grid-column: 2;
 }
 
+.clue-card.active .clue-type,
+.clue-card.active strong,
+.clue-card.active small {
+  grid-column: 1;
+}
+
 .clue-type {
   color: var(--cyan);
   font-size: 10px;
+}
+
+.clue-empty {
+  border: 1px dashed rgba(148, 163, 175, 0.42);
+  border-radius: 7px;
+  padding: 14px;
+  color: var(--muted);
+  background: rgba(13, 19, 27, 0.7);
+}
+
+.clue-empty strong {
+  color: var(--ink);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.clue-empty p {
+  margin: 0;
+  line-height: 1.55;
 }
 
 .run-button {
@@ -577,7 +637,6 @@ button {
 }
 
 .dashboard-grid,
-.workbench-grid,
 .intro-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -591,8 +650,7 @@ button {
 }
 
 .timeline-list,
-.truth-threads,
-.dossier-grid {
+.truth-threads {
   padding: 14px;
 }
 
@@ -624,8 +682,7 @@ button {
 
 .timeline-item p,
 .thread-card p,
-.how-card li,
-.dossier-row p {
+.how-card li {
   color: var(--muted);
   line-height: 1.55;
   margin: 0;
@@ -925,12 +982,6 @@ button {
   font-size: 2.4px;
 }
 
-.dossier-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
 .investigation-panel {
   overflow: hidden;
 }
@@ -1027,59 +1078,6 @@ button {
 .clue-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.dossier-card {
-  border: 1px solid var(--line);
-  background: #0d131b;
-  border-radius: 8px;
-  padding: 14px;
-}
-
-.dossier-portrait {
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  object-position: center 18%;
-  border: 1px solid rgba(148, 163, 175, 0.28);
-  border-radius: 6px;
-  display: block;
-  margin-bottom: 12px;
-  background: #091018;
-}
-
-.dossier-card.rose { border-color: rgba(239, 95, 114, 0.35); }
-.dossier-card.amber { border-color: rgba(243, 182, 75, 0.35); }
-.dossier-card.cyan { border-color: rgba(40, 215, 232, 0.35); }
-.dossier-card.green { border-color: rgba(98, 217, 139, 0.35); }
-
-.dossier-title {
-  margin-bottom: 10px;
-}
-
-.dossier-title span {
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.dossier-title strong {
-  display: block;
-  font-size: 22px;
-  margin-top: 3px;
-}
-
-.dossier-row {
-  border-top: 1px solid var(--line);
-  display: grid;
-  grid-template-columns: 72px 1fr;
-  gap: 10px;
-  padding: 10px 0;
-}
-
-.dossier-row span {
-  color: var(--ink);
-  font-weight: 700;
-  font-size: 13px;
 }
 
 .live-panel,
@@ -1217,6 +1215,99 @@ button {
   color: var(--cyan);
 }
 
+.comeback-panel {
+  margin-top: 16px;
+  border: 1px solid rgba(244, 184, 79, 0.44);
+  background: rgba(244, 184, 79, 0.07);
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.comeback-panel h3 {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.comeback-panel p {
+  margin: 0;
+}
+
+.comeback-clues {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.comeback-clue {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 10px;
+  align-items: start;
+  border: 1px solid rgba(148, 163, 175, 0.24);
+  background: rgba(13, 19, 27, 0.72);
+  border-radius: 7px;
+  padding: 10px;
+}
+
+.comeback-clue input {
+  margin-top: 4px;
+}
+
+.comeback-clue strong,
+.comeback-clue small {
+  display: block;
+}
+
+.comeback-clue strong {
+  color: var(--ink);
+}
+
+.comeback-clue small {
+  color: var(--muted);
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.comeback-button {
+  width: 100%;
+  margin-top: 12px;
+  min-height: 52px;
+}
+
+.comeback-result {
+  margin-top: 12px;
+}
+
+.comeback-error {
+  color: var(--rose);
+}
+
+.comeback-result-card {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0d131b;
+  padding: 12px;
+}
+
+.comeback-result-card.neon { border-color: var(--cyan); }
+.comeback-result-card.green { border-color: var(--green); }
+.comeback-result-card.danger { border-color: var(--rose); }
+
+.comeback-result-card strong {
+  color: var(--ink);
+}
+
+.comeback-result-card p {
+  margin-top: 6px;
+}
+
+.comeback-result-card small {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+}
+
 @media (max-width: 1120px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -1265,7 +1356,6 @@ button {
   }
 
   .truth-threads,
-  .dossier-grid,
   .clue-grid,
   .step-choice-slots,
   .step-actions,

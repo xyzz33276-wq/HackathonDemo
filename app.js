@@ -6,10 +6,11 @@ let running = false;
 let latestMetrics = null;
 let currentAct = 1;
 let finalCompleted = false;
+let latestReport = null;
 
 const selectedChoices = ["press-ren", "audit-security-bot", "expose-system"];
 const completedActs = new Set();
-const selectedClues = new Set(["elevator-gap", "paper-note"]);
+const earnedClues = new Map();
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -30,7 +31,6 @@ async function init() {
   renderClues();
   renderSuspects(config.suspects.map(initialSuspectState));
   renderMetrics(config.baseState, "初始状态");
-  renderDossiers();
   bindEvents();
   setRunning(false);
 }
@@ -65,7 +65,20 @@ function renderCase() {
 }
 
 function renderStory() {
-  $("openingStory").innerHTML = config.caseFile.opening.map((text) => `<p>${escapeHtml(text)}</p>`).join("");
+  const ruleQuote = config.v3Rules?.ruleQuote
+    ? `<div class="rule-quote">${escapeHtml(config.v3Rules.ruleQuote)}</div>`
+    : "";
+  const secondaryLog = config.v3Rules?.secondaryLogNote
+    ? `<aside class="log-note">
+        <strong>${escapeHtml(config.v3Rules.secondaryLogNote.title)}</strong>
+        ${config.v3Rules.secondaryLogNote.text.map((text) => `<p>${escapeHtml(text)}</p>`).join("")}
+      </aside>`
+    : "";
+  $("openingStory").innerHTML = [
+    ...config.caseFile.opening.map((text) => `<p>${escapeHtml(text)}</p>`),
+    ruleQuote,
+    secondaryLog
+  ].join("");
   $("playerMemory").innerHTML = config.caseFile.playerMemory.map((text) => `<li>${escapeHtml(text)}</li>`).join("");
 }
 
@@ -184,23 +197,42 @@ function lockedSlotOverlay(actId) {
   return `<div class="slot-lock" aria-hidden="true"><span>${reason}</span></div>`;
 }
 
+function mergeEarnedClues(clues) {
+  (clues || []).forEach((clue) => {
+    if (!clue?.id) return;
+    const existing = earnedClues.get(clue.id);
+    if (existing) {
+      earnedClues.set(clue.id, { ...existing, ...clue });
+      return;
+    }
+    earnedClues.set(clue.id, { ...clue });
+  });
+}
+
+function orderedEarnedClues() {
+  const order = new Map(config.clues.map((clue, index) => [clue.id, index]));
+  return [...earnedClues.values()].sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
+}
+
 function renderClues() {
-  $("clueList").innerHTML = config.clues.map((clue) => `
-    <label class="clue-card ${selectedClues.has(clue.id) ? "active" : ""}">
-      <input type="checkbox" value="${clue.id}" ${selectedClues.has(clue.id) ? "checked" : ""} />
+  const clues = orderedEarnedClues();
+  if (!clues.length) {
+    $("clueList").innerHTML = `
+      <article class="clue-empty">
+        <strong>尚未获得线索</strong>
+        <p>每完成一幕，证据板会根据你的行动自动补充线索。</p>
+      </article>
+    `;
+    return;
+  }
+
+  $("clueList").innerHTML = clues.map((clue) => `
+    <article class="clue-card active">
       <span class="clue-type">${escapeHtml(clue.type)}</span>
       <strong>${escapeHtml(clue.name)}</strong>
       <small>${escapeHtml(clue.text)}</small>
-    </label>
+    </article>
   `).join("");
-
-  document.querySelectorAll(".clue-card input").forEach((input) => {
-    input.addEventListener("change", () => {
-      if (input.checked) selectedClues.add(input.value);
-      else selectedClues.delete(input.value);
-      input.closest(".clue-card").classList.toggle("active", input.checked);
-    });
-  });
 }
 
 function getChoice(id) {
@@ -212,9 +244,11 @@ function resetInvestigation() {
   currentAct = 1;
   finalCompleted = false;
   latestMetrics = null;
+  latestReport = null;
   completedActs.clear();
+  earnedClues.clear();
   $("liveFeed").innerHTML = "";
-  $("reportBody").innerHTML = "<p>选择当前幕行动与公开线索后，点击“推演当前幕”。每一幕完成后才会解锁下一幕。</p>";
+  $("reportBody").innerHTML = "<p>选择当前幕行动后，点击“推演当前幕”。每一幕完成后会自动获得线索，并解锁下一幕。</p>";
   $("endingMeta").textContent = "未生成";
   $("phaseTicker").textContent = "等待第 1 幕启动";
   $("activeSpeaker").textContent = "等待角色入场";
@@ -223,6 +257,7 @@ function resetInvestigation() {
   $("riskBadge").textContent = "未推演";
   $("riskBadge").className = "risk-pill neutral";
   renderChoices();
+  renderClues();
   renderSuspects(config.suspects.map(initialSuspectState));
   renderMetrics(config.baseState, "初始状态");
 }
@@ -253,7 +288,6 @@ function startRun() {
 
   const params = new URLSearchParams({
     choices: JSON.stringify(selectedChoices.slice(0, currentAct)),
-    publicClues: JSON.stringify([...selectedClues]),
     actLimit: String(currentAct),
     focusAct: String(currentAct)
   });
@@ -263,6 +297,7 @@ function startRun() {
   eventSource.addEventListener("metrics", (event) => handleMetrics(JSON.parse(event.data)));
   eventSource.addEventListener("act-start", (event) => handleActStart(JSON.parse(event.data)));
   eventSource.addEventListener("dialogue", (event) => handleDialogue(JSON.parse(event.data)));
+  eventSource.addEventListener("clue-earned", (event) => handleClueEarned(JSON.parse(event.data)));
   eventSource.addEventListener("state-shift", (event) => handleStateShift(JSON.parse(event.data)));
   eventSource.addEventListener("step-complete", (event) => handleStepComplete(JSON.parse(event.data)));
   eventSource.addEventListener("report", (event) => renderReport(JSON.parse(event.data)));
@@ -301,6 +336,8 @@ function setRunning(value) {
 }
 
 function handleStart(data) {
+  mergeEarnedClues(data.earnedClues);
+  renderClues();
   $("streamState").textContent = "事件流运行中";
   $("phaseTicker").textContent = data.message;
   appendSystem(data.message);
@@ -339,12 +376,22 @@ function handleDialogue(item) {
   $("liveFeed").prepend(article);
 }
 
+function handleClueEarned(data) {
+  mergeEarnedClues(data.clues);
+  renderClues();
+  (data.clues || []).forEach((clue) => {
+    appendSystem(`获得线索：${clue.name}。`);
+  });
+}
+
 function handleStateShift(data) {
+  mergeEarnedClues(data.earnedClues);
   $("phaseTicker").textContent = `${data.label} · ${data.reason}`;
   $("riskBadge").textContent = `${data.risk.label} ${data.risk.score}`;
   $("riskBadge").className = `risk-pill ${data.risk.tone}`;
   renderMetrics(data.state, data.label);
   if (data.state?.cast) renderSuspects(data.state.cast);
+  renderClues();
   appendSystem("局势更新：证词、线索权重和后续可选路径已改变。");
 }
 
@@ -357,8 +404,10 @@ function handleStepComplete(data) {
   $("phaseTicker").textContent = data.message;
   $("riskBadge").textContent = `${data.risk.label} ${data.risk.score}`;
   $("riskBadge").className = `risk-pill ${data.risk.tone}`;
+  mergeEarnedClues(data.earnedClues);
   renderMetrics(data.state, `第 ${data.completedAct} 幕后`);
   if (data.state?.cast) renderSuspects(data.state.cast);
+  renderClues();
   renderChoices();
   appendSystem(data.message);
 }
@@ -486,32 +535,6 @@ function miniBar(label, value, tone) {
   `;
 }
 
-function renderDossiers() {
-  $("dossierGrid").innerHTML = config.suspects.map((suspect) => `
-    <article class="dossier-card ${suspect.color}">
-      ${imageTag(suspect.image, suspect.name, "dossier-portrait")}
-      <div class="dossier-title">
-        <span>${escapeHtml(suspect.role)}</span>
-        <strong>${escapeHtml(suspect.name)}</strong>
-      </div>
-      ${dossierRow("关系", suspect.relationship)}
-      ${dossierRow("动机", suspect.motive)}
-      ${dossierRow("知道什么", suspect.knows)}
-      ${dossierRow("正在隐瞒", suspect.liesAbout)}
-      ${dossierRow("与你有关", suspect.playerHook)}
-    </article>
-  `).join("");
-}
-
-function dossierRow(label, text) {
-  return `
-    <div class="dossier-row">
-      <span>${escapeHtml(label)}</span>
-      <p>${escapeHtml(text)}</p>
-    </div>
-  `;
-}
-
 function imageTag(src, alt, className) {
   if (!src) return "";
   return `<img class="${escapeHtml(className)}" src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" loading="lazy" />`;
@@ -519,27 +542,29 @@ function imageTag(src, alt, className) {
 
 function renderReport(report) {
   finalCompleted = true;
+  latestReport = report;
+  mergeEarnedClues(report.evidence);
   completedActs.add(3);
   $("actCounter").textContent = "3 / 3";
   $("streamState").textContent = "已完成";
   $("phaseTicker").textContent = "三幕推演完成";
   $("endingMeta").textContent = report.title;
   $("reportBody").innerHTML = `
-    <div class="ending-card ${escapeHtml(report.tone)}">
-      <span>ENDING</span>
+    <div id="endingCard" class="ending-card ${escapeHtml(report.tone)}">
+      <span>${endingTypeLabel(report.resultType)}</span>
       <strong>${escapeHtml(report.title)}</strong>
       <p>${escapeHtml(report.summary)}</p>
     </div>
     <div class="report-section">
       <h3>已选择行动</h3>
-      ${report.chosen.map((item) => `<div class="report-line">${escapeHtml(item)}</div>`).join("")}
+      ${report.path.map((item) => `<div class="report-line"><strong>${escapeHtml(item.node)}</strong><span>${escapeHtml(item.label)}</span></div>`).join("")}
     </div>
     <div class="report-section">
-      <h3>关键证据</h3>
+      <h3>已获得证据</h3>
       ${report.evidence.map((item) => `
-        <div class="report-line ${item.public ? "public" : ""}">
+        <div class="report-line public">
           <strong>${escapeHtml(item.name)}</strong>
-          <span>${item.public ? "已公开" : "未公开"}</span>
+          <span>已获得</span>
         </div>
       `).join("")}
     </div>
@@ -547,14 +572,117 @@ function renderReport(report) {
       <h3>遗漏与下一步</h3>
       ${report.missed.concat(report.recommendations).map((item) => `<div class="report-line">${escapeHtml(item)}</div>`).join("")}
     </div>
+    ${report.allowComeback ? renderComebackPanel() : ""}
   `;
   if (report.finalState) {
     latestMetrics = report.finalState;
     renderMetrics(report.finalState, "最终状态");
     if (report.finalState.cast) renderSuspects(report.finalState.cast);
   }
+  renderClues();
   renderChoices();
   updateCurrentActCopy();
+  bindComebackPanel();
+}
+
+function endingTypeLabel(type) {
+  if (type === "win") return "ENDING / 赢";
+  if (type === "open") return "ENDING / 开放式";
+  return "ENDING / 输";
+}
+
+function renderComebackPanel() {
+  const clues = orderedEarnedClues();
+  return `
+    <div class="comeback-panel">
+      <div>
+        <h3>最后公开线索</h3>
+        <p>默认结局为输。你可以从已获得线索中选择 1 到 2 条公开，尝试补上证据链缺口。</p>
+      </div>
+      <div class="comeback-clues">
+        ${clues.map((clue) => `
+          <label class="comeback-clue">
+            <input type="checkbox" value="${escapeHtml(clue.id)}" />
+            <span>
+              <strong>${escapeHtml(clue.name)}</strong>
+              <small>${escapeHtml(clue.text)}</small>
+            </span>
+          </label>
+        `).join("")}
+      </div>
+      <button id="comebackButton" class="run-button comeback-button" type="button">
+        <span>公开所选线索</span>
+        <strong>FINAL</strong>
+      </button>
+      <div id="comebackResult" class="comeback-result"></div>
+    </div>
+  `;
+}
+
+function bindComebackPanel() {
+  const button = $("comebackButton");
+  if (!button) return;
+  document.querySelectorAll(".comeback-clue input").forEach((input) => {
+    input.addEventListener("change", () => {
+      const checked = document.querySelectorAll(".comeback-clue input:checked");
+      if (checked.length > 2) input.checked = false;
+    });
+  });
+  button.addEventListener("click", submitComeback);
+}
+
+async function submitComeback() {
+  const resultNode = $("comebackResult");
+  const selected = [...document.querySelectorAll(".comeback-clue input:checked")].map((input) => input.value);
+  if (!selected.length || selected.length > 2) {
+    resultNode.innerHTML = `<p class="comeback-error">请选择 1 到 2 条线索。</p>`;
+    return;
+  }
+
+  const button = $("comebackButton");
+  button.disabled = true;
+  resultNode.innerHTML = "<p>正在公开线索...</p>";
+
+  try {
+    const params = new URLSearchParams({
+      choices: JSON.stringify(selectedChoices.slice(0, 3)),
+      finalClues: JSON.stringify(selected)
+    });
+    const response = await fetch(`/api/comeback?${params.toString()}`);
+    if (!response.ok) throw new Error("最后公开线索失败");
+    const result = await response.json();
+    renderComebackResult(result);
+  } catch (error) {
+    resultNode.innerHTML = `<p class="comeback-error">${escapeHtml(error.message)}</p>`;
+    button.disabled = false;
+  }
+}
+
+function renderComebackResult(result) {
+  const resultNode = $("comebackResult");
+  const card = $("endingCard");
+  if (card) {
+    card.className = `ending-card ${escapeHtml(result.tone || "danger")}`;
+    card.innerHTML = `
+      <span>FINAL / ${escapeHtml(result.resultType === "win" ? "翻盘成功" : result.resultType === "open" ? "开放式" : "仍然失败")}</span>
+      <strong>${escapeHtml(result.title)}</strong>
+      <p>${escapeHtml(result.summary)}</p>
+    `;
+  }
+  $("endingMeta").textContent = result.title;
+  $("streamState").textContent = result.resultType === "win" ? "翻盘成功" : result.resultType === "open" ? "开放式" : "仍失败";
+  resultNode.innerHTML = `
+    <article class="comeback-result-card ${escapeHtml(result.tone || "danger")}">
+      <strong>${escapeHtml(result.title)}</strong>
+      <p>${escapeHtml(result.summary)}</p>
+      <small>${escapeHtml(result.reason || "")}</small>
+    </article>
+  `;
+  if (result.finalState) {
+    latestMetrics = result.finalState;
+    renderMetrics(result.finalState, "最后公开后");
+    if (result.finalState.cast) renderSuspects(result.finalState.cast);
+  }
 }
 
 function updateCurrentActCopy() {
@@ -578,7 +706,7 @@ init().catch((error) => {
 
 function renderArchiveError(error) {
   const message = escapeHtml(error.message || "案件加载失败，请刷新页面");
-  ["openingStory", "characterOverview", "timelineList", "truthThreads", "dossierGrid"].forEach((id) => {
+  ["openingStory", "characterOverview", "timelineList", "truthThreads"].forEach((id) => {
     const node = $(id);
     if (node) node.innerHTML = `<article class="archive-error">${message}</article>`;
   });

@@ -7,7 +7,7 @@ const config = require("./case-data");
 const rootDir = __dirname;
 const imageDir = path.resolve(rootDir, "角色图片");
 const port = Number(process.env.PORT || 8797);
-const { caseFile, suspects, clues, choices, acts, baseState } = config;
+const { caseFile, suspects, clues, choices, acts, baseState, v3Rules } = config;
 const defaultChoices = ["press-ren", "audit-security-bot", "expose-system"];
 
 const mimeTypes = {
@@ -52,24 +52,22 @@ function createRun(input) {
   const selectedIds = Array.isArray(input.choices) && input.choices.length
     ? input.choices
     : defaultChoices;
-  const publicClues = Array.isArray(input.publicClues)
-    ? input.publicClues
-    : ["elevator-gap", "paper-note"];
   const actLimit = clampAct(input.actLimit || selectedIds.length || 1);
   const focusAct = clampAct(input.focusAct || actLimit);
   const chosen = buildChoicePath(selectedIds, actLimit);
   const state = { ...baseState };
   const cast = suspects.map((item) => ({ ...item }));
-  const clueDeck = clues.map((item) => ({ ...item, public: publicClues.includes(item.id) }));
+  const earnedBeforeFocus = earnedClueEntries(chosen.slice(0, Math.max(0, focusAct - 1)));
+  const earnedForRun = earnedClueEntries(chosen.slice(0, actLimit));
   const events = [];
 
   events.push({
     event: "start",
     data: {
-      message: "案件沙盘启动：记住核心规则，第一句谎言只是入口，不是结案答案。",
+      message: "案件沙盘启动：第一个撒谎的人不一定是凶手，但可能是突破口。",
       caseFile,
       selectedChoices: chosen.map((item) => item.id),
-      publicClues,
+      earnedClues: cluePayload(earnedBeforeFocus),
       actLimit,
       focusAct
     }
@@ -82,23 +80,38 @@ function createRun(input) {
   chosen.slice(0, actLimit).forEach((choice, index) => {
     const act = acts[index];
     applyChoice(state, cast, choice);
-    applyPublicClues(state, cast, clueDeck, index);
 
     if (act.id !== focusAct) return;
+    const newlyEarned = diffClueEntries(
+      earnedClueEntries(chosen.slice(0, index + 1)),
+      earnedClueEntries(chosen.slice(0, index))
+    );
 
     events.push({
       event: "act-start",
       data: {
         act,
         choice,
+        node: nodeForChoice(choice.id),
         state: publicState(state, cast),
         risk: riskLabel(state)
       }
     });
 
-    buildDialogue(choice, act, state, cast, clueDeck).forEach((line) => {
+    buildDialogue(choice, act, state, cast, earnedForRun).forEach((line) => {
       events.push({ event: "dialogue", data: line });
     });
+
+    if (newlyEarned.length) {
+      events.push({
+        event: "clue-earned",
+        data: {
+          actId: act.id,
+          choiceId: choice.id,
+          clues: cluePayload(newlyEarned)
+        }
+      });
+    }
 
     events.push({
       event: "state-shift",
@@ -107,7 +120,7 @@ function createRun(input) {
         reason: choice.label,
         state: publicState(state, cast),
         risk: riskLabel(state),
-        unlocked: unlockedClues(clueDeck, index)
+        earnedClues: cluePayload(earnedClueEntries(chosen.slice(0, index + 1)))
       }
     });
 
@@ -115,7 +128,7 @@ function createRun(input) {
   });
 
   if (actLimit >= 3 && focusAct === 3) {
-    events.push({ event: "report", data: resolveEnding(state, cast, chosen.slice(0, 3), clueDeck) });
+    events.push({ event: "report", data: resolveEnding(state, cast, chosen.slice(0, 3)) });
   } else {
     events.push({
       event: "step-complete",
@@ -124,6 +137,7 @@ function createRun(input) {
         nextAct: Math.min(3, focusAct + 1),
         state: publicState(state, cast),
         risk: riskLabel(state),
+        earnedClues: cluePayload(earnedClueEntries(chosen.slice(0, focusAct))),
         message: `第 ${focusAct} 幕推演完成：现在进入下一幕，继续验证“谎言的目的”。`
       }
     });
@@ -152,6 +166,84 @@ function choicesForAct(actId, previousId) {
   return choices.filter((item) => item.act === actId && (!item.after || item.after.includes(previousId)));
 }
 
+function nodeForChoice(choiceId) {
+  return v3Rules.choiceNodes[choiceId] || "";
+}
+
+function pathKeyFromChoices(pathChoices) {
+  return pathChoices.map((choice) => choice.id).join("|");
+}
+
+function getClue(id) {
+  return clues.find((clue) => clue.id === id);
+}
+
+function mergeClueEntries(entries) {
+  const seen = new Map();
+  entries.forEach((entry) => {
+    if (!entry?.id) return;
+    if (!seen.has(entry.id)) {
+      seen.set(entry.id, { ...entry });
+      return;
+    }
+    const current = seen.get(entry.id);
+    if (entry.source && !current.source.includes(entry.source)) {
+      current.source = `${current.source} / ${entry.source}`;
+    }
+  });
+  return [...seen.values()];
+}
+
+function earnedClueEntries(pathChoices) {
+  const entries = [];
+  pathChoices.forEach((choice) => {
+    entries.push(...(v3Rules.clueUnlocks[choice.id] || []));
+  });
+  if (pathChoices.length >= 3) {
+    entries.push(...(v3Rules.finalClueUnlocks[pathKeyFromChoices(pathChoices)] || []));
+  }
+  return mergeClueEntries(entries);
+}
+
+function diffClueEntries(nextEntries, previousEntries) {
+  const previousIds = new Set(previousEntries.map((entry) => entry.id));
+  return nextEntries.filter((entry) => !previousIds.has(entry.id));
+}
+
+function cluePayload(entries) {
+  return entries
+    .map((entry) => {
+      const clue = getClue(entry.id);
+      if (!clue) return null;
+      return {
+        id: clue.id,
+        name: clue.name,
+        type: clue.type,
+        text: clue.text,
+        source: entry.source || "",
+        publicRisk: clue.publicRisk
+      };
+    })
+    .filter(Boolean);
+}
+
+function endingForPath(pathChoices) {
+  const key = pathKeyFromChoices(pathChoices);
+  return v3Rules.endings[key] || {
+    id: "unknown-coverup",
+    title: "真相被掩盖",
+    resultType: "lose",
+    tone: "danger",
+    summary: "证据链没有闭合，城市网络把案件重新写成事故。",
+    missed: ["路径证据不足。"],
+    recommendations: ["回溯三幕选择，寻找能把突破口接到系统因果链的路线。"]
+  };
+}
+
+function sortedIds(ids) {
+  return [...ids].sort().join("|");
+}
+
 function applyChoice(state, cast, choice) {
   state.truth = clamp(state.truth + choice.effect.truth);
   state.memory = clamp(state.memory + choice.effect.memory);
@@ -167,19 +259,6 @@ function applyChoice(state, cast, choice) {
   if (choice.target === "sora") {
     state.systemSuspicion = clamp(state.systemSuspicion + 12);
   }
-}
-
-function applyPublicClues(state, cast, clueDeck, actIndex) {
-  clueDeck.filter((clue) => clue.public).slice(0, actIndex + 1).forEach((clue) => {
-    state.truth = clamp(state.truth + (clue.impact.truth || 0) * 0.45);
-    state.memory = clamp(state.memory + (clue.impact.memory || 0) * 0.45);
-    state.pressure = clamp(state.pressure + (clue.impact.pressure || 0) * 0.35);
-    state.systemSuspicion = clamp(state.systemSuspicion + (clue.impact.systemSuspicion || 0) * 0.5);
-    updateCast(cast, "ren", clue.impact.renSuspicion || 0, 0, 0);
-    updateCast(cast, "mara", clue.impact.maraSuspicion || 0, 0, clue.impact.maraTrust || 0);
-    updateCast(cast, "sora", clue.impact.soraSuspicion || 0, 0, 0);
-    updateCast(cast, "yue", 0, 0, clue.impact.trustYue || 0);
-  });
 }
 
 function updateCast(cast, id, suspicionDelta, concealmentDelta, trustDelta) {
@@ -218,8 +297,17 @@ function publicState(state, cast) {
   };
 }
 
-function buildDialogue(choice, act, state, cast, clueDeck) {
+function simulatePath(pathChoices) {
+  const state = { ...baseState };
+  const cast = suspects.map((item) => ({ ...item }));
+  pathChoices.forEach((choice) => applyChoice(state, cast, choice));
+  return { state, cast };
+}
+
+function buildDialogue(choice, act, state, cast, earnedEntries) {
   const target = cast.find((item) => item.id === choice.target) || cast[0];
+  const node = nodeForChoice(choice.id);
+  const scripted = v3Rules.dialogue[choice.id] || {};
   const ruleLine = {
     1: "本幕只确认谁最先露出破绽。请暂时不要把第一个撒谎的人当成凶手。",
     2: "本幕要判断谎言用途：他是在自保、保护你，还是保护城市系统。",
@@ -232,15 +320,15 @@ function buildDialogue(choice, act, state, cast, clueDeck) {
       : "局势仍可控。继续区分“谁撒谎”和“谁能操纵所有人的谎言”。";
 
   return [
-    line("system", act.id, act.time, "本幕目标", `${act.title} 启动：${act.focus}`),
+    line("system", act.id, act.time, "本幕目标", `${act.title} / 节点 ${node}：${act.focus}`),
     line(target.id, act.id, "讯问", target.name, choiceBeat(choice.id, target.name)),
     line("system", act.id, "推理规则", "案件规则", ruleLine),
-    line("ren", act.id, "企业线", "任舷", renLine(choice.target)),
-    line("mara", act.id, "黑市线", "玛拉", maraLine(choice.target)),
-    line("sora", act.id, "系统线", "SORA-9", soraLine(choice.target)),
-    line("yue", act.id, "记忆线", "岳临", yueLine(choice.target)),
+    line("ren", act.id, "企业线", "任舷", scripted.ren || renLine(choice.target)),
+    line("mara", act.id, "黑市线", "玛拉", scripted.mara || maraLine(choice.target)),
+    line("sora", act.id, "系统线", "SORA-9", scripted.sora || soraLine(choice.target)),
+    line("yue", act.id, "记忆线", "岳临", scripted.yue || yueLine(choice.target)),
     line("system", act.id, "状态更新", "沙盘", stateLine),
-    clueLine(clueDeck, act.id)
+    clueLine(earnedEntries, act.id)
   ];
 }
 
@@ -294,24 +382,25 @@ function line(agentId, actId, time, speaker, text) {
   return { agentId, actId, time, speaker, text };
 }
 
-function clueLine(clueDeck, actId) {
-  const clue = clueDeck.filter((item) => item.public)[actId - 1] || clueDeck[actId - 1] || clueDeck[0];
+function clueLine(earnedEntries, actId) {
+  const payload = cluePayload(earnedEntries);
+  const clue = payload[payload.length - 1] || payload[0];
+  if (!clue) {
+    return {
+      agentId: "clue",
+      actId,
+      time: "获得线索",
+      speaker: "线索板",
+      text: "本幕尚未获得可公开线索。继续推进选择，证据会随路径解锁。"
+    };
+  }
   return {
     agentId: "clue",
     actId,
-    time: "公开线索",
+    time: "获得线索",
     speaker: clue.name,
-    text: `${clue.public ? "已公开" : "未公开"}：${clue.text} 风险：${clue.publicRisk}`
+    text: `已获得：${clue.text} 来源：${clue.source || "当前行动"}`
   };
-}
-
-function unlockedClues(clueDeck, actIndex) {
-  return clueDeck.slice(0, actIndex + 2).map((clue) => ({
-    id: clue.id,
-    name: clue.name,
-    public: clue.public,
-    text: clue.text
-  }));
 }
 
 function riskLabel(state) {
@@ -321,77 +410,139 @@ function riskLabel(state) {
   return { label: "低噪调查", tone: "safe", score: clamp(danger) };
 }
 
-function resolveEnding(state, cast, chosen, clueDeck) {
-  const ren = cast.find((item) => item.id === "ren");
-  const sora = cast.find((item) => item.id === "sora");
-  const yue = cast.find((item) => item.id === "yue");
-  const lastChoice = chosen[2]?.id || "";
-  const publicSystemClues = clueDeck.filter((item) => item.public && ["memory-shard", "paper-note", "elevator-gap"].includes(item.id)).length;
+function resolveEnding(state, cast, chosen) {
+  const ending = endingForPath(chosen);
+  const earned = earnedClueEntries(chosen);
+  return {
+    ok: true,
+    id: ending.id,
+    title: ending.title,
+    tone: ending.tone,
+    resultType: ending.resultType,
+    summary: ending.summary,
+    allowComeback: ending.resultType === "lose",
+    finalState: publicState(state, cast),
+    chosen: chosen.map((item) => item.label),
+    path: chosen.map((item) => ({
+      id: item.id,
+      node: nodeForChoice(item.id),
+      label: item.label
+    })),
+    evidence: cluePayload(earned),
+    missed: ending.missed || [],
+    recommendations: ending.recommendations || []
+  };
+}
 
-  let id = "coverup";
-  let title = "真相被掩盖";
-  let tone = "danger";
-  let summary = "城市网络封存关键日志，角色互相牵制，你只拿到一份无法公开的报告。问题没有结束，只是被改写成事故。";
+function resolveComeback(chosen, finalClues) {
+  const ending = endingForPath(chosen);
+  const key = pathKeyFromChoices(chosen);
+  const earnedIds = new Set(earnedClueEntries(chosen).map((entry) => entry.id));
+  const selected = Array.isArray(finalClues) ? finalClues.filter(Boolean) : [];
 
-  if ((lastChoice === "expose-system" || lastChoice === "force-public-hearing") && state.truth >= 78 && state.memory >= 54 && state.systemSuspicion >= 66 && publicSystemClues >= 2) {
-    id = "system-conspiracy";
-    title = "系统共谋被揭露";
-    tone = "neon";
-    summary = "你证明林栖不是被单一凶手杀死，而是被城市预测模型判定为未来风险。任舷负责遮掩，SORA-9 负责执行，岳临删除记录是为了让你活着重查一次。";
-  } else if (lastChoice === "accuse-ren" && ren.suspicion >= 82 && state.truth >= 68 && state.pressure < 86) {
-    id = "corporate-killer";
-    title = "企业凶手落网";
-    tone = "amber";
-    summary = "任舷因篡改电梯日志被捕，案件可以结案；但城市网络控制信号没有被解释，林栖真正害怕的系统仍然在线。";
-  } else if (lastChoice === "protect-witnesses" && yue.trust >= 78 && state.memory >= 70) {
-    id = "co-investigator";
-    title = "与前搭档重启暗线";
-    tone = "green";
-    summary = "你没有急着公开结论，而是保护玛拉和岳临，恢复旧调查路线。林栖之死只是入口，真正案件指向整座城市的记忆治理。";
-  } else if ((lastChoice === "expose-system" || lastChoice === "force-public-hearing") && sora.suspicion >= 78 && state.truth < 72) {
-    id = "misjudgment";
-    title = "误判 AI";
-    tone = "danger";
-    summary = "你把矛头指向 SORA-9，却缺少日志闭环和记忆证据。企业趁机转移责任，玛拉消失，岳临拒绝继续提供纸质笔记。";
+  if (ending.resultType !== "lose") {
+    return {
+      ok: false,
+      allowed: false,
+      resultType: ending.resultType,
+      title: ending.title,
+      summary: "当前结局不是失败结局，不触发最后公开线索。",
+      reason: "开放式与胜利结局不进入补证。"
+    };
+  }
+
+  if (selected.length === 0) {
+    return {
+      ok: false,
+      allowed: true,
+      resultType: "lose",
+      title: "未公开线索",
+      tone: "danger",
+      summary: "你没有公开任何线索，等同于接受失败结局。",
+      reason: "最后公开至少需要 1 条线索。"
+    };
+  }
+
+  if (selected.length > 2) {
+    return {
+      ok: false,
+      allowed: true,
+      resultType: "lose",
+      title: "证据噪音过高",
+      tone: "danger",
+      summary: "公开 3 条或更多线索会被 SORA-9 归类为不可信组合，仍然失败。",
+      reason: "最后公开最多 2 条线索。"
+    };
+  }
+
+  const unavailable = selected.filter((id) => !earnedIds.has(id));
+  if (unavailable.length) {
+    return {
+      ok: false,
+      allowed: true,
+      resultType: "lose",
+      title: "线索尚未获得",
+      tone: "danger",
+      summary: "最后公开只能使用本次路径已经获得的线索。",
+      reason: `未获得线索：${unavailable.join(", ")}`
+    };
+  }
+
+  const comeback = v3Rules.comeback[key];
+  const selectedKey = sortedIds(selected);
+  const winKey = comeback?.winClues ? sortedIds(comeback.winClues) : "";
+
+  if (comeback?.resultType === "win" && selectedKey === winKey) {
+    return {
+      ok: true,
+      allowed: true,
+      resultType: "win",
+      title: comeback.title,
+      tone: comeback.tone,
+      summary: comeback.summary,
+      reason: "精确命中败局缺口。",
+      evidence: selected.map((id) => getClue(id)).filter(Boolean).map((clue) => ({
+        id: clue.id,
+        name: clue.name,
+        text: clue.text,
+        public: true
+      }))
+    };
+  }
+
+  if (comeback?.resultType === "open") {
+    return {
+      ok: true,
+      allowed: true,
+      resultType: "open",
+      title: comeback.title,
+      tone: comeback.tone,
+      summary: comeback.summary,
+      reason: "补证无法赢下本案，但保住了后续调查空间。",
+      evidence: selected.map((id) => getClue(id)).filter(Boolean).map((clue) => ({
+        id: clue.id,
+        name: clue.name,
+        text: clue.text,
+        public: true
+      }))
+    };
   }
 
   return {
-    id,
-    title,
-    tone,
-    summary,
-    finalState: publicState(state, cast),
-    chosen: chosen.map((item) => item.label),
-    evidence: clueDeck.map((clue) => ({
+    ok: true,
+    allowed: true,
+    resultType: "lose",
+    title: "补证失败",
+    tone: "danger",
+    summary: "公开组合没有命中当前败局缺口，证据链仍被系统和企业拆散。",
+    reason: "线索组合不精确。",
+    evidence: selected.map((id) => getClue(id)).filter(Boolean).map((clue) => ({
+      id: clue.id,
       name: clue.name,
-      public: clue.public,
-      text: clue.text
-    })),
-    missed: missedNotes(id),
-    recommendations: recommendations(id)
+      text: clue.text,
+      public: true
+    }))
   };
-}
-
-function missedNotes(id) {
-  const map = {
-    "system-conspiracy": ["仍需追查 SORA-9 训练样本来源。", "任舷是遮掩层，不一定是最高授权者。"],
-    "corporate-killer": ["单人凶手结论可以结案，但无法解释城市网络回执。", "记忆污染事故仍被企业隐藏。"],
-    misjudgment: ["缺少电梯二级日志或纸质笔记支撑。", "过早公开判断让角色进入防御状态。"],
-    "co-investigator": ["短期没有公开凶手。", "你选择保护暗线，换取续章调查空间。"],
-    coverup: ["真相值不足。", "记忆恢复不足。", "公开线索太少，证据链被城市网络切断。"]
-  };
-  return map[id] || map.coverup;
-}
-
-function recommendations(id) {
-  const map = {
-    "system-conspiracy": ["下一步进入城市 AI 听证会。", "把任舷定义为遮掩者，而不是唯一凶手。"],
-    "corporate-killer": ["补齐 SORA-9 控制信号证据。", "保护玛拉作为污染证人。"],
-    misjudgment: ["回溯路线，先复原日志或读取纸质笔记。", "不要只凭 SORA-9 嫌疑就公开系统结论。"],
-    "co-investigator": ["保留岳临暗线。", "把玩家记忆碎片作为续章主线。"],
-    coverup: ["增加公开线索数量。", "至少选择一次日志、训练库或纸质笔记路线。"]
-  };
-  return map[id] || map.coverup;
 }
 
 function streamPlay(req, res, url) {
@@ -404,7 +555,6 @@ function streamPlay(req, res, url) {
 
   const input = {
     choices: parseJsonParam(url, "choices", []),
-    publicClues: parseJsonParam(url, "publicClues", []),
     actLimit: Number(url.searchParams.get("actLimit") || 1),
     focusAct: Number(url.searchParams.get("focusAct") || url.searchParams.get("actLimit") || 1)
   };
@@ -468,6 +618,20 @@ function handleRequest(req, res) {
     streamPlay(req, res, url);
     return;
   }
+  if (url.pathname === "/api/comeback") {
+    const selectedIds = parseJsonParam(url, "choices", defaultChoices);
+    const finalClues = parseJsonParam(url, "finalClues", []);
+    const chosen = buildChoicePath(selectedIds, 3);
+    const simulation = simulatePath(chosen);
+    json(res, {
+      ...resolveComeback(chosen, finalClues),
+      finalState: publicState(simulation.state, simulation.cast),
+      defaultEnding: endingForPath(chosen),
+      choices: chosen.map((choice) => choice.id),
+      earnedClues: cluePayload(earnedClueEntries(chosen))
+    });
+    return;
+  }
   const pathname = decodeURIComponent(url.pathname);
   if (pathname.startsWith("/角色图片/")) {
     serveCharacterImage(res, pathname);
@@ -488,7 +652,7 @@ if (require.main === module) {
     process.exit(1);
   });
 
-  server.listen(port, "0.0.0.0", () => {
+  server.listen(port, "127.0.0.1", () => {
     console.log(`Neon Case 已启动：http://127.0.0.1:${port}`);
   });
 }
