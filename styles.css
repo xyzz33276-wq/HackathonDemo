@@ -384,8 +384,7 @@ button {
   gap: 10px;
 }
 
-.overview-card,
-.plot-card {
+.overview-card {
   border: 1px solid var(--line);
   background: #0d131b;
   border-radius: 7px;
@@ -404,8 +403,7 @@ button {
   background: #091018;
 }
 
-.overview-card span,
-.plot-card span {
+.overview-card span {
   color: var(--cyan);
   display: block;
   font-size: 11px;
@@ -413,37 +411,25 @@ button {
   margin-bottom: 5px;
 }
 
-.overview-card strong,
-.plot-card strong {
+.overview-card strong {
   display: block;
   color: var(--ink);
   margin-bottom: 7px;
 }
 
-.overview-card p,
-.plot-card p {
+.overview-card p {
   color: var(--muted);
   line-height: 1.55;
   margin: 0;
 }
 
-.plot-overview {
-  border-top: 1px solid var(--line);
-  padding: 14px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
 .sidebar-grid,
 .case-sidebar .overview-grid,
-.case-sidebar .plot-overview,
 .case-sidebar .truth-threads {
   grid-template-columns: 1fr;
 }
 
 .case-sidebar .overview-grid,
-.case-sidebar .plot-overview,
 .case-sidebar .timeline-list,
 .case-sidebar .truth-threads {
   padding: 0 14px 14px;
@@ -1323,7 +1309,6 @@ button {
   .clue-grid,
   .step-choice-slots,
   .overview-grid,
-  .plot-overview,
   .metrics-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1360,7 +1345,6 @@ button {
   .step-choice-slots,
   .step-actions,
   .overview-grid,
-  .plot-overview,
   .metrics-grid {
     grid-template-columns: 1fr;
   }

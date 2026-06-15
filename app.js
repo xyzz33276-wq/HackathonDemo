@@ -91,14 +91,6 @@ function renderOverviews() {
       <p>${escapeHtml(item.text)}</p>
     </article>
   `).join("");
-
-  $("plotOverview").innerHTML = config.caseFile.plotOverview.map((item, index) => `
-    <article class="plot-card">
-      <span>ACT ${index + 1}</span>
-      <strong>${escapeHtml(item.title)}</strong>
-      <p>${escapeHtml(item.text)}</p>
-    </article>
-  `).join("");
 }
 
 function renderCaseContext() {
